@@ -1,112 +1,209 @@
-extern crate x11;
-extern crate x11_dl;
+use clap::Parser;
+use ctrlc;
+use std::{
+    collections::VecDeque,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    },
+    thread,
+    time::{Duration, Instant},
+};
+use x11::{xfixes, xlib};
 
-use x11::xlib;
-use std::ptr;
-use std::thread;
-use std::time::Duration;
-use std::ffi::CStr;
+mod audio;
+mod config;
+mod image;
+mod visualization;
+mod x11_interface;
 
-extern "C" fn error_handler(display: *mut xlib::Display, event: *mut xlib::XErrorEvent) -> i32 {
-    unsafe {
-        let mut error_text = [0i8; 1024];
-        xlib::XGetErrorText(display, (*event).error_code as i32, error_text.as_mut_ptr(), error_text.len() as i32);
-        let error_description = CStr::from_ptr(error_text.as_ptr()).to_string_lossy();
+use crate::config::*;
+use crate::image::CursorImage;
+use crate::x11_interface::*;
+use crate::visualization::apply;
 
-        println!("X Error: type={}, error_code={}, request_code={}, minor_code={}, description={}",
-                 (*event).type_, (*event).error_code, (*event).request_code, (*event).minor_code, error_description);
-    }
-    0
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, value_enum, default_value_t = VisualizationMode::Oscilloscope)]
+    mode: VisualizationMode,
+
+    /// Color in hex format (RRGGBB or AARRGGBB). Default is intense bright orange.
+    #[arg(short, long, default_value = "CCFF4500")]
+    color: String,
 }
 
-fn set_cursor_for_all_windows(display: *mut xlib::Display, window: xlib::Window, cursor: xlib::Cursor) {
-    let mut root_return = 0;
-    let mut parent_return = 0;
-    let mut children_return: *mut xlib::Window = ptr::null_mut();
-    let mut nchildren_return = 0;
-
-    unsafe {
-        // Query the tree for all windows starting from the root or the current window
-        if xlib::XQueryTree(display, window, &mut root_return, &mut parent_return, &mut children_return, &mut nchildren_return) != 0 {
-            let children_slice = std::slice::from_raw_parts(children_return, nchildren_return as usize);
-
-            // Set the cursor for each window, including children windows recursively
-            for &child in children_slice {
-                xlib::XDefineCursor(display, child, cursor);
-                set_cursor_for_all_windows(display, child, cursor); // Recurse into sub-windows
-            }
-
-            if !children_return.is_null() {
-                xlib::XFree(children_return as *mut _);
-            }
-        }
+fn parse_color(s: &str) -> Result<u32, String> {
+    let s = s.trim_start_matches('#');
+    let val = u32::from_str_radix(s, 16).map_err(|_| "Invalid hex color".to_string())?;
+    
+    if s.len() == 6 {
+        // Assume full opacity (or specifically, we usually want some transparency for cursor overlay, 
+        // but if user gave 6 chars, let's just prefix with CC (translucent) or FF (opaque).
+        // The existing code used CC (approx 80%). Let's stick to that if 6 chars provided?
+        // Or maybe FF. Let's do FF (opaque) if they explicitly asked for a color, 
+        // OR CC if we want to maintain the "overlay" feel.
+        // The default is 8 chars "CCFF4500".
+        // If user says "FF0000", maybe they want solid red.
+        // Let's assume FF (solid) for 6 chars, unless we want to force transparency.
+        // Actually, let's default to CC (translucent) if 6 chars to keep it usable as a cursor.
+        Ok(val | 0xCC000000)
+    } else if s.len() == 8 {
+        Ok(val)
+    } else {
+        Err("Color must be 6 or 8 hex digits".to_string())
     }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
+    let mode = args.mode;
+    let color_val = parse_color(&args.color).unwrap_or_else(|e| {
+        eprintln!("Warning: {e}. Using default color.");
+        0xCCFF4500
+    });
+
+    // Initialize Safe X11 Context
+    let ctx = X11Context::new()?;
+
+    let (mut base_image, original_cursor) = ctx.get_default_cursor();
+            
+    // Prepare a dedicated "safe" cursor for restoring the root window on exit.
+    // We explicitly ask for "left_ptr" (standard arrow) to avoid restoring a text beam
+    // if the app was started while hovering over a terminal.
+    let safe_restore_cursor = {
+         let img = ctx.load_cursor_image_by_name("left_ptr")
+             .unwrap_or_else(crate::image::fallback_cursor_image);
+         ctx.create_cursor_from_image(&img)
+             .unwrap_or_else(|_| ctx.create_font_cursor(XC_LEFT_PTR))
+    };
+
+    let running = Arc::new(AtomicBool::new(true));
+    let running_audio = running.clone();
+    let running_signal = running.clone();
+    ctrlc::set_handler(move || {
+        running_signal.store(false, Ordering::SeqCst);
+    })?;
+
+    let (tx, rx) = mpsc::channel();
+    let audio_handle = thread::spawn(move || {
+        if let Err(err) = audio::audio_loop(running_audio, tx) {
+            eprintln!("Audio loop error: {err}");
+        }
+    });
+
+    let mut windows = ctx.collect_windows();
+    let mut current_audio_data = AudioData::default();
+    let mut last_level_time = Instant::now();
+    let mut heartbeat_toggle = false;
+    let mut last_cursor_refresh = Instant::now();
+    
+    let mut dynamic_cursor: Option<xlib::Cursor> = None;
+    let mut cursor_history: VecDeque<CursorImage> = VecDeque::new();
+    const HISTORY_SIZE: usize = 20;
+
+    println!("Cursor equalizer active (Mode: {:?}, Color: {:08X}). Press Ctrl+C to restore the default cursor.", mode, color_val);
+
+    while running.load(Ordering::SeqCst) {
+        // 1. Process X11 Events (Check for external cursor changes)
+        while ctx.pending() > 0 {
+            let event = ctx.next_event();
+            // Accessing union fields is unsafe
+            let etype = unsafe { event.type_ };
+            
+            if etype == xlib::MapNotify || etype == xlib::CreateNotify {
+                windows = ctx.collect_windows();
+            } else if etype == ctx.event_base + crate::config::XFIXES_CURSOR_NOTIFY {
+                let ce = unsafe { *(&event as *const xlib::XEvent as *const xfixes::XFixesCursorNotifyEvent) };
+                if ce.subtype == crate::config::XFIXES_DISPLAY_CURSOR_NOTIFY {
+                    if let Some(ci) = ctx.fetch_current_cursor() {
+                        // If the new cursor is NOT one of our recent frames, it's an external change.
+                        if ci != base_image && !cursor_history.contains(&ci) {
+                            base_image = ci; 
+                            cursor_history.clear(); // Base changed, history is irrelevant
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Polling fallback for cursor changes
+        if last_cursor_refresh.elapsed() >= Duration::from_millis(CURSOR_POLL_MS) {
+            last_cursor_refresh = Instant::now();
+            if let Some(ci) = ctx.fetch_current_cursor() {
+                if ci != base_image && !cursor_history.contains(&ci) {
+                    base_image = ci;
+                    cursor_history.clear();
+                }
+            }
+        }
+
+        // 3. Receive latest Audio Data
+        while let Ok(new_data) = rx.try_recv() {
+            current_audio_data = new_data;
+            last_level_time = Instant::now();
+        }
+
+        // 4. Heartbeat logic (modify level if silence)
+        if last_level_time.elapsed() > Duration::from_millis(HEARTBEAT_MS) {
+            heartbeat_toggle = !heartbeat_toggle;
+            current_audio_data.level = if heartbeat_toggle { 0.05 } else { 0.0 };
+        }
+
+        // 5. Render & Apply Cursor
+        let pixels = apply(&base_image, &current_audio_data, mode, color_val);
+        let overlay_image = CursorImage {
+            pixels,
+            width: base_image.width,
+            height: base_image.height,
+            xhot: base_image.xhot,
+            yhot: base_image.yhot,
+        };
+        
+        if let Ok(new_cursor) = ctx.create_cursor_from_image(&overlay_image) {
+                ctx.apply_cursor(new_cursor, &windows);
+                if let Some(old_c) = dynamic_cursor.replace(new_cursor) {
+                    ctx.free_cursor(old_c);
+                }
+                
+                cursor_history.push_back(overlay_image);
+                if cursor_history.len() > HISTORY_SIZE {
+                    cursor_history.pop_front();
+                }
+        }
+
+        thread::sleep(Duration::from_millis(1000 / UPDATE_HZ));
+    }
+
+    // Restore defaults
+    // Restore the root window's cursor to the standard arrow.
     unsafe {
-        let old_handler = xlib::XSetErrorHandler(Some(error_handler));
+        xlib::XDefineCursor(ctx.display, ctx.root, safe_restore_cursor);
+    }
 
-        let display = xlib::XOpenDisplay(ptr::null());
-        if display.is_null() {
-            return Err("Failed to open display".into());
-        }
-
-        let screen = xlib::XDefaultScreen(display);
-        let root = xlib::XRootWindow(display, screen);
-
-        // Array of cursor shapes to cycle through
-        let cursor_shapes = [
-            34,  // XC_crosshair
-            58,  // XC_left_ptr
-            24,  // XC_arrow
-            52,  // XC_hand1
-            150, // XC_watch
-        ];
-
-        println!("Cycling through different cursor shapes. Press Ctrl+C to exit.");
-
-        for (i, &shape) in cursor_shapes.iter().enumerate() {
-            let custom_cursor = xlib::XCreateFontCursor(display, shape);
-            if custom_cursor == 0 {
-                println!("Failed to create cursor with shape {}", shape);
-                continue;
+    // For all other windows that we might have modified,
+    // explicitly unset their cursors so they revert to their own definitions.
+    for &win in &windows {
+        // Only modify non-root windows here.
+        if win != ctx.root {
+            unsafe {
+                xlib::XDefineCursor(ctx.display, win, 0); // Unset cursor for this window
             }
-
-            println!("Attempt {} to set cursor shape {}...", i + 1, shape);
-
-            // Set the cursor for the root window (the desktop background)
-            let result = xlib::XDefineCursor(display, root, custom_cursor);
-            if result != 0 {
-                println!("Failed to define cursor for shape {} on the root window.", shape);
-            }
-
-            // Also set the cursor for all child windows recursively
-            set_cursor_for_all_windows(display, root, custom_cursor);
-
-            // Flush to make sure the change is applied
-            xlib::XFlush(display);
-
-            println!("Cursor should now be changed to shape {}.", shape);
-
-            println!("Sleeping for 5 seconds. Please check if the cursor has changed.");
-            thread::sleep(Duration::from_secs(5));
-
-            // Free the cursor after use
-            xlib::XFreeCursor(display, custom_cursor);
         }
+    }
+    unsafe { xlib::XFlush(ctx.display); }
 
-        // Restore the default cursor
-        println!("Restoring default cursor...");
-        let undefine_result = xlib::XUndefineCursor(display, root);
-        println!("XUndefineCursor result: {}", undefine_result);
+    if let Some(c) = dynamic_cursor {
+         ctx.free_cursor(c);
+    }
+    // original_cursor is associated with ctx/main-display and will be freed when ctx drops or we can free it now.
+    ctx.free_cursor(original_cursor);
+    ctx.free_cursor(safe_restore_cursor);
+    
+    // ctx is dropped here, closing display and restoring error handler.
 
-        // Flush to apply the restoration of the default cursor
-        xlib::XFlush(display);
-
-        // Clean up
-        xlib::XCloseDisplay(display);
-        xlib::XSetErrorHandler(old_handler);
+    if let Err(err) = audio_handle.join() {
+        eprintln!("Audio thread terminated: {err:?}");
     }
 
     Ok(())

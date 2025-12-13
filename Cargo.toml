@@ -1,13 +1,20 @@
 [package]
-name = "cursor_equalizer"
+name = "pulsepointer"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "PulsePointer: A Linux utility that visualizes audio output on your mouse cursor using X11 and PulseAudio."
+authors = ["Simon"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/simonskrede/pulsepointer"
+keywords = ["x11", "cursor", "audio", "visualization", "pulseaudio"]
 
 [dependencies]
-x11 = "2.19.1"
-x11-dl = "2.21.0"
-
-[build-dependencies]
-cc = "1.0" # Add this for linking C libraries
+x11 = { version = "2.21", features = ["xfixes", "xcursor"] }
+libpulse-binding = "2.28"
+libpulse-simple-binding = "2.28"
+ctrlc = "3.4"
+bytemuck = { version = "1.19", features = ["extern_crate_std"] }
+libc = "0.2"
+clap = { version = "4.5.53", features = ["derive"] }
+rustfft = "6.4.1"
