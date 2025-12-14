@@ -76,7 +76,7 @@ pub fn fallback_cursor_image() -> CursorImage {
     let width = 32;
     let height = 32;
     let mut pixels = vec![0u32; (width * height) as usize];
-    // Tiny white dot so the cursor is visible even if XFixes fetch fails.
+    // Tiny white dot so the cursor stays visible if fetch fails.
     if width > 1 && height > 1 {
         pixels[1 * width as usize + 1] = 0xFFFFFFFF;
     }

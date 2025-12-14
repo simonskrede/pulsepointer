@@ -56,7 +56,7 @@ pub fn audio_loop(running: Arc<AtomicBool>, tx: mpsc::Sender<AudioData>) -> Resu
     let mut last_log = Instant::now();
     let log_levels = env::var("CURSOR_EQ_LOG").is_ok();
 
-    // FFT Setup
+    // FFT setup
     let mut planner = FftPlanner::new();
     let fft = planner.plan_fft_forward(AUDIO_CHUNK_FRAMES);
     let mut fft_buffer = vec![Complex { re: 0.0, im: 0.0 }; AUDIO_CHUNK_FRAMES];
@@ -71,17 +71,15 @@ pub fn audio_loop(running: Arc<AtomicBool>, tx: mpsc::Sender<AudioData>) -> Resu
             continue;
         }
 
-        // --- Waveform Capture (Mono) ---
+        // Capture mono samples for FFT and oscilloscope
         let mut waveform = Vec::with_capacity(AUDIO_CHUNK_FRAMES);
-        // We'll capture mono samples for both FFT and Oscilloscope
         for chunk in samples.chunks_exact(2) {
             let left = chunk[0] as f32 / i16::MAX as f32;
             let right = chunk[1] as f32 / i16::MAX as f32;
             waveform.push((left + right) / 2.0);
         }
 
-        // --- Triggering / Stabilization ---
-        // Simple zero-crossing trigger: Find first positive zero-crossing
+        // Simple zero-crossing trigger
         let mut trigger_offset = 0;
         for i in 0..waveform.len().saturating_sub(1) {
             if waveform[i] <= 0.0 && waveform[i+1] > 0.0 {
@@ -89,8 +87,8 @@ pub fn audio_loop(running: Arc<AtomicBool>, tx: mpsc::Sender<AudioData>) -> Resu
                 break;
             }
         }
-        
-        // --- Level Calculation (RMS) ---
+
+        // Level calculation (RMS)
         let mut sum_sq = 0.0f32;
         let mut peak = 0.0f32;
         for &mono in &waveform {
@@ -102,7 +100,7 @@ pub fn audio_loop(running: Arc<AtomicBool>, tx: mpsc::Sender<AudioData>) -> Resu
         let current_level = (rms * 3.0).min(peak * 1.2).min(1.0);
         smoothed_level = smoothed_level * 0.7 + current_level * 0.3;
 
-        // --- FFT Calculation ---
+        // FFT calculation
         for (i, &mono) in waveform.iter().enumerate() {
             if i >= AUDIO_CHUNK_FRAMES { break; }
             fft_buffer[i] = Complex {
@@ -110,18 +108,14 @@ pub fn audio_loop(running: Arc<AtomicBool>, tx: mpsc::Sender<AudioData>) -> Resu
                 im: 0.0,
             };
         }
-        
+
         fft.process(&mut fft_buffer);
 
-        // Map FFT bins to SPECTRUM_BUCKETS using a logarithmic scale.
-        // Limit to ~16kHz (approx bin 342) to avoid wasting buckets on inaudible/empty ultrasonics.
-        // 48kHz sample rate / 1024 frames = 46.875 Hz per bin.
-        // 16000 / 46.875 ~= 341.
+        // Map FFT bins to buckets on a rough log scale, stop near 16 kHz.
         let max_bin = 342.min(AUDIO_CHUNK_FRAMES / 2);
         let log_max = (max_bin as f32).ln();
-        
+
         for i in 0..SPECTRUM_BUCKETS {
-            // Calculate bin range for this bucket
             let freq_start = (i as f32 / SPECTRUM_BUCKETS as f32 * log_max).exp();
             let freq_end = ((i + 1) as f32 / SPECTRUM_BUCKETS as f32 * log_max).exp();
             
@@ -134,34 +128,26 @@ pub fn audio_loop(running: Arc<AtomicBool>, tx: mpsc::Sender<AudioData>) -> Resu
             for idx in start_bin..end_bin {
                 if idx < fft_buffer.len() {
                     let norm = fft_buffer[idx].norm();
-                    // Use MAX instead of Average. 
-                    // High freq buckets span many bins; spectral peaks are sparse. Average dilutes them.
+                    // Peaks read better than averages here.
                     bucket_mag = bucket_mag.max(norm);
                 }
             }
-            
-            // Whitening / Pre-emphasis: Strong linear boost for highs.
-            // i=0 -> 1.0x
-            // i=31 -> 16.5x
+
+            // Light boost for higher buckets.
             let freq_boost = (i as f32 * 0.5) + 1.0;
-            
-            // Normalize
-            let sensitivity = 8.0; 
+
+            let sensitivity = 8.0;
             let val = (bucket_mag / (AUDIO_CHUNK_FRAMES as f32) * sensitivity * freq_boost).clamp(0.0, 1.0);
-            
-            // Fast attack, faster decay for dynamic look
+
+            // Fast attack, faster decay for a lively look
             if val > smoothed_spectrum[i] {
                  smoothed_spectrum[i] = smoothed_spectrum[i] * 0.6 + val * 0.4;
             } else {
                  smoothed_spectrum[i] = smoothed_spectrum[i] * 0.75 + val * 0.25;
             }
         }
-        
-        // Prepare waveform for display (apply trigger offset)
-        // If we found a trigger, rotate/slice so it starts there.
-        // Or simpler: just send the raw buffer, visualization can handle cropping.
-        // But for stability, let's rotate it here or send a "stable" slice.
-        // Let's just rotate the vector so index 0 is the trigger point.
+
+        // Rotate so the view starts on the trigger.
         if trigger_offset > 0 {
              waveform.rotate_left(trigger_offset);
         }

@@ -38,15 +38,7 @@ fn parse_color(s: &str) -> Result<u32, String> {
     let val = u32::from_str_radix(s, 16).map_err(|_| "Invalid hex color".to_string())?;
     
     if s.len() == 6 {
-        // Assume full opacity (or specifically, we usually want some transparency for cursor overlay, 
-        // but if user gave 6 chars, let's just prefix with CC (translucent) or FF (opaque).
-        // The existing code used CC (approx 80%). Let's stick to that if 6 chars provided?
-        // Or maybe FF. Let's do FF (opaque) if they explicitly asked for a color, 
-        // OR CC if we want to maintain the "overlay" feel.
-        // The default is 8 chars "CCFF4500".
-        // If user says "FF0000", maybe they want solid red.
-        // Let's assume FF (solid) for 6 chars, unless we want to force transparency.
-        // Actually, let's default to CC (translucent) if 6 chars to keep it usable as a cursor.
+        // For 6-digit colors, add a translucent alpha channel.
         Ok(val | 0xCC000000)
     } else if s.len() == 8 {
         Ok(val)
@@ -63,14 +55,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0xCCFF4500
     });
 
-    // Initialize Safe X11 Context
+    // Set up X11
     let ctx = X11Context::new()?;
 
     let (mut base_image, original_cursor) = ctx.get_default_cursor();
             
-    // Prepare a dedicated "safe" cursor for restoring the root window on exit.
-    // We explicitly ask for "left_ptr" (standard arrow) to avoid restoring a text beam
-    // if the app was started while hovering over a terminal.
+    // Keep a basic pointer around for cleanup.
     let safe_restore_cursor = {
          let img = ctx.load_cursor_image_by_name("left_ptr")
              .unwrap_or_else(crate::image::fallback_cursor_image);
@@ -105,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Cursor equalizer active (Mode: {:?}, Color: {:08X}). Press Ctrl+C to restore the default cursor.", mode, color_val);
 
     while running.load(Ordering::SeqCst) {
-        // 1. Process X11 Events (Check for external cursor changes)
+        // 1. Process X11 events and detect cursor changes
         while ctx.pending() > 0 {
             let event = ctx.next_event();
             // Accessing union fields is unsafe
@@ -117,10 +107,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let ce = unsafe { *(&event as *const xlib::XEvent as *const xfixes::XFixesCursorNotifyEvent) };
                 if ce.subtype == crate::config::XFIXES_DISPLAY_CURSOR_NOTIFY {
                     if let Some(ci) = ctx.fetch_current_cursor() {
-                        // If the new cursor is NOT one of our recent frames, it's an external change.
+                        // Ignore frames we just drew.
                         if ci != base_image && !cursor_history.contains(&ci) {
-                            base_image = ci; 
-                            cursor_history.clear(); // Base changed, history is irrelevant
+                            base_image = ci;
+                            cursor_history.clear();
                         }
                     }
                 }
@@ -138,19 +128,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // 3. Receive latest Audio Data
+        // 3. Receive latest audio data
         while let Ok(new_data) = rx.try_recv() {
             current_audio_data = new_data;
             last_level_time = Instant::now();
         }
 
-        // 4. Heartbeat logic (modify level if silence)
+        // 4. Heartbeat while idle
         if last_level_time.elapsed() > Duration::from_millis(HEARTBEAT_MS) {
             heartbeat_toggle = !heartbeat_toggle;
             current_audio_data.level = if heartbeat_toggle { 0.05 } else { 0.0 };
         }
 
-        // 5. Render & Apply Cursor
+        // 5. Render and apply cursor
         let pixels = apply(&base_image, &current_audio_data, mode, color_val);
         let overlay_image = CursorImage {
             pixels,
@@ -176,13 +166,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Restore defaults
-    // Restore the root window's cursor to the standard arrow.
     unsafe {
         xlib::XDefineCursor(ctx.display, ctx.root, safe_restore_cursor);
     }
 
-    // For all other windows that we might have modified,
-    // explicitly unset their cursors so they revert to their own definitions.
+    // Clear cursors on other windows.
     for &win in &windows {
         // Only modify non-root windows here.
         if win != ctx.root {

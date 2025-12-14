@@ -43,8 +43,7 @@ pub struct X11Context {
     old_handler: Option<unsafe extern "C" fn(*mut xlib::Display, *mut xlib::XErrorEvent) -> c_int>,
 }
 
-// Send marker to allow passing Context to threads if needed, though Xlib isn't fully thread safe without init.
-// For this single threaded event loop, it is fine.
+// Allow sharing the context, even though this loop stays single-threaded.
 unsafe impl Send for X11Context {}
 
 impl X11Context {

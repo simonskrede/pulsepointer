@@ -14,8 +14,7 @@ pub fn draw(base: &CursorImage, waveform: &[f32], color: u32) -> Vec<u32> {
     let cy = height as f32 / 2.0;
     let radius = (width.min(height) as f32 / 2.0) - 5.0;
 
-    // We'll draw a circle where the radius is modulated by the waveform
-    // Since waveform is time-domain audio, we can wrap it around the circle.
+    // Radius follows the waveform wrapped around the circle.
     
     let num_points = 64; 
     let step = PI * 2.0 / num_points as f32;
@@ -27,7 +26,6 @@ pub fn draw(base: &CursorImage, waveform: &[f32], color: u32) -> Vec<u32> {
         let sample_idx = (i * waveform.len() / num_points) % waveform.len();
         let sample = waveform[sample_idx].abs(); // use magnitude
         
-        // Modulate radius
         let r = radius + (sample * 40.0);
         
         let x0 = (cx + r * angle.cos()) as i32;
