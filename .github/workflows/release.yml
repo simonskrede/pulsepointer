@@ -104,6 +104,7 @@ jobs:
     permissions:
       contents: write
     env:
+      GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       BASE_REVISION: ${{ github.event_name == 'workflow_dispatch' && inputs.package_revision || '1' }}
