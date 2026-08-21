@@ -42,6 +42,7 @@ else
         ca-certificates
         extra-cmake-modules
         kwin-dev
+        libdrm-dev
         libkf6kcmutils-dev
         libpulse-dev
         pkg-config

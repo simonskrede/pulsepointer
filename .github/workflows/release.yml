@@ -44,7 +44,7 @@ jobs:
           apt-get update
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
-            kwin-dev kwin-x11-dev libkf6kcmutils-dev libpulse-dev \
+            kwin-dev kwin-x11-dev libdrm-dev libkf6kcmutils-dev libpulse-dev \
             ninja-build pkg-config
 
       - name: Check out release tag
