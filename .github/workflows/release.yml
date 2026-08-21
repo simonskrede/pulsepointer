@@ -1,0 +1,133 @@
+name: Build release packages
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing vX.Y.Z tag to build
+        required: true
+        type: string
+      package_revision:
+        description: Package rebuild number
+        required: true
+        default: "1"
+        type: string
+      publish:
+        description: Upload packages to the GitHub Release
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    name: Ubuntu ${{ matrix.ubuntu }} / amd64
+    runs-on: ubuntu-24.04
+    container: ubuntu:${{ matrix.ubuntu }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ["26.04"]
+    env:
+      BASE_REVISION: ${{ github.event_name == 'workflow_dispatch' && inputs.package_revision || '1' }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+    steps:
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            build-essential ca-certificates cargo cmake extra-cmake-modules \
+            kwin-dev kwin-x11-dev libkf6kcmutils-dev libpulse-dev \
+            ninja-build pkg-config
+
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+
+      - name: Validate release tag
+        shell: bash
+        run: |
+          expected_tag="v$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n1)"
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Release tag $RELEASE_TAG does not match Cargo.toml ($expected_tag)" >&2
+            exit 1
+          fi
+
+      - name: Build distribution packages
+        shell: bash
+        run: |
+          PACKAGE_REVISION="${BASE_REVISION}+ubuntu${{ matrix.ubuntu }}" \
+            ./packaging/build-deb.sh
+
+      - name: Record package compatibility
+        shell: bash
+        run: |
+          metadata="dist/PACKAGE-METADATA-ubuntu${{ matrix.ubuntu }}-amd64.txt"
+          {
+            echo "PulsePointer tag: $RELEASE_TAG"
+            echo "Ubuntu release: ${{ matrix.ubuntu }}"
+            dpkg-query -W -f='Wayland KWin: ${Package} ${Version}\n' libkwin6
+            dpkg-query -W -f='X11 KWin: ${Package} ${Version}\n' libkwin-x11-6
+            echo
+            dpkg-deb --field dist/pulsepointer_*.deb Package Version Architecture Depends
+            echo
+            dpkg-deb --field dist/pulsepointer-kwin-x11_*.deb Package Version Architecture Depends
+          } >"$metadata"
+
+      - name: Generate build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*.deb
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsepointer-ubuntu-${{ matrix.ubuntu }}-amd64
+          path: |
+            dist/*.deb
+            dist/PACKAGE-METADATA-*.txt
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release assets
+    if: github.event_name == 'push' || inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      BASE_REVISION: ${{ github.event_name == 'workflow_dispatch' && inputs.package_revision || '1' }}
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v5
+        with:
+          pattern: pulsepointer-ubuntu-*-amd64
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum ./*.deb >"SHA256SUMS-${BASE_REVISION}"
+
+      - name: Create release or upload new package revision
+        shell: bash
+        run: |
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f -print | sort)
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}"
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --verify-tag --generate-notes --title "PulsePointer ${RELEASE_TAG#v}"
+          fi

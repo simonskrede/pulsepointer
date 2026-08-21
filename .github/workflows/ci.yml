@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-26-04:
+    name: Ubuntu 26.04 / Plasma 6
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    steps:
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends \
+            build-essential ca-certificates cargo cmake extra-cmake-modules \
+            kwin-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
+            rust-clippy rustfmt
+
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+
+      - name: Lint Rust
+        run: cargo clippy --locked --all-targets -- --deny warnings
+
+      - name: Test Rust
+        run: cargo test --locked
+
+      - name: Build Wayland package
+        run: ./packaging/build-deb.sh --wayland-only
+
+      - name: Upload test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsepointer-ci-ubuntu-26.04-amd64
+          path: dist/*.deb
+          if-no-files-found: error
+          retention-days: 7

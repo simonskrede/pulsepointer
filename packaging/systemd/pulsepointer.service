@@ -1,0 +1,14 @@
+[Unit]
+Description=PulsePointer audio visualization daemon
+Documentation=https://github.com/simonskrede/pulsepointer
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pulsepointer
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

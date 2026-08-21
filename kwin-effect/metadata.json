@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Simon Skrede"
+            }
+        ],
+        "Category": "Accessibility",
+        "Description": "Animate the mouse pointer in response to live system audio",
+        "EnabledByDefault": true,
+        "License": "MIT",
+        "Name": "PulsePointer"
+    },
+    "X-KDE-ConfigModule": "pulsepointer_config"
+}

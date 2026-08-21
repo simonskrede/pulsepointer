@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Description": "Configure PulsePointer's audio-reactive cursor visualization",
+        "License": "MIT",
+        "Name": "PulsePointer"
+    },
+    "X-KDE-ParentComponents": [
+        "pulsepointer"
+    ]
+}
