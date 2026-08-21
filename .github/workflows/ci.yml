@@ -21,7 +21,7 @@ jobs:
           apt-get update
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
-            kwin-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
+            kwin-dev libdrm-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
             rust-clippy rustfmt
 
       - name: Check out source
