@@ -1,5 +1,7 @@
 # PulsePointer
 
+[pulsepointer_example.webm](https://github.com/user-attachments/assets/e91d36bb-18a7-48e4-85da-b2df4e3bec0a)
+
 [![CI](https://github.com/simonskrede/pulsepointer/actions/workflows/ci.yml/badge.svg)](https://github.com/simonskrede/pulsepointer/actions/workflows/ci.yml)
 
 PulsePointer makes the mouse pointer react to system audio in KDE Plasma 6.
