@@ -32,7 +32,7 @@ matching your Ubuntu/Kubuntu release from the
 and install it. For example, on 26.04:
 
 ```bash
-sudo apt install ./pulsepointer_0.2.0-1+ubuntu26.04_amd64.deb
+sudo apt install ./pulsepointer_0.2.1-1+ubuntu26.04_amd64.deb
 ```
 
 On 26.10, choose the package whose filename contains `ubuntu26.10` instead.
@@ -40,8 +40,8 @@ On 26.10, choose the package whose filename contains `ubuntu26.10` instead.
 For a Plasma X11 session, install both packages:
 
 ```bash
-sudo apt install ./pulsepointer_0.2.0-1+ubuntu26.04_amd64.deb \
-  ./pulsepointer-kwin-x11_0.2.0-1+ubuntu26.04_amd64.deb
+sudo apt install ./pulsepointer_0.2.1-1+ubuntu26.04_amd64.deb \
+  ./pulsepointer-kwin-x11_0.2.1-1+ubuntu26.04_amd64.deb
 ```
 
 Log out and back in once so KWin discovers the native effect. The package

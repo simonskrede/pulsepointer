@@ -27,7 +27,7 @@ the target Ubuntu archive.
 
 1. Update the version in `Cargo.toml` and the CMake project.
 2. Merge and verify that the CI workflow passes.
-3. Create and push a matching tag, for example `v0.2.0`.
+3. Create and push a matching tag, for example `v0.2.1`.
 4. The release workflow builds the Wayland and X11 packages, generates GitHub
    build-provenance attestations, and attaches the `.deb` files plus SHA-256
    checksums to a GitHub Release.
@@ -35,10 +35,10 @@ the target Ubuntu archive.
 The package names identify the target, for example:
 
 ```text
-pulsepointer_0.2.0-1+ubuntu26.04_amd64.deb
-pulsepointer-kwin-x11_0.2.0-1+ubuntu26.04_amd64.deb
-pulsepointer_0.2.0-1+ubuntu26.10_amd64.deb
-pulsepointer-kwin-x11_0.2.0-1+ubuntu26.10_amd64.deb
+pulsepointer_0.2.1-1+ubuntu26.04_amd64.deb
+pulsepointer-kwin-x11_0.2.1-1+ubuntu26.04_amd64.deb
+pulsepointer_0.2.1-1+ubuntu26.10_amd64.deb
+pulsepointer-kwin-x11_0.2.1-1+ubuntu26.10_amd64.deb
 ```
 
 For a later KWin update within the same Ubuntu release, run **Build release
