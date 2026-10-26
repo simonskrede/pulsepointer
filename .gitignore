@@ -2,3 +2,4 @@
 /dist
 /.idea/
 /GEMINI.md
+__pycache__/
