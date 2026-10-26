@@ -26,10 +26,13 @@ jobs:
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
             kwin-dev libdrm-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
-            rust-clippy rustfmt
+            python3 rust-clippy rustfmt
 
       - name: Check out source
         uses: actions/checkout@v6
+
+      - name: Test release version updates
+        run: python3 -m unittest discover -s tests -p test_release_version.py
 
       - name: Check Rust formatting
         run: cargo fmt --check

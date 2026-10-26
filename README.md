@@ -120,6 +120,10 @@ to `dist/`. GitHub's release workflow runs this build for Ubuntu 26.04 and
 26.10 on `amd64`. Release revisions and additional distribution targets are
 documented in [distribution-packaging.md](docs/distribution-packaging.md).
 
+To publish a new version, use **Actions → Release → Run workflow** and choose
+the version increment. See [Releasing PulsePointer](docs/releasing.md) for
+the steps and for rebuilding packages after a KWin update.
+
 ## Development checks
 
 Install `rust-clippy` and `rustfmt` in addition to the package-build

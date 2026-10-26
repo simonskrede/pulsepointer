@@ -25,12 +25,18 @@ its official `ubuntu:<version>` container. This ensures the headers,
 libraries, dependency names, and generated package metadata all come from
 the target Ubuntu archive.
 
-1. Update the version in `Cargo.toml` and the CMake project.
-2. Merge and verify that the CI workflow passes.
-3. Create and push a matching tag, for example `v0.2.1`.
-4. The release workflow builds the Wayland and X11 packages, generates GitHub
-   build-provenance attestations, and attaches the `.deb` files plus SHA-256
-   checksums to a GitHub Release.
+1. Merge the changes to `main` and verify that CI passes.
+2. Open **Actions → Release → Run workflow**, select `main`, and choose
+   `patch`, `minor`, or `major`.
+3. The action updates all application versions and package examples, checks
+   the Rust code, then commits and tags the new version.
+4. In the same run, the package workflow builds the Wayland and X11 packages,
+   generates GitHub build-provenance attestations, and attaches the `.deb`
+   files plus SHA-256 checksums to a GitHub Release.
+
+See [Releasing PulsePointer](releasing.md) for the complete release and
+package-rebuild instructions, including recovery after a failed run. Pushing
+a matching version tag manually also continues to start the package workflow.
 
 The package names identify the target, for example:
 
