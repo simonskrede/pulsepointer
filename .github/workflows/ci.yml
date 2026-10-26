@@ -9,10 +9,14 @@ permissions:
   contents: read
 
 jobs:
-  ubuntu-26-04:
-    name: Ubuntu 26.04 / Plasma 6
+  ubuntu:
+    name: Ubuntu ${{ matrix.ubuntu }} / Plasma 6
     runs-on: ubuntu-24.04
-    container: ubuntu:26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ['26.04', '26.10']
+    container: ubuntu:${{ matrix.ubuntu }}
     steps:
       - name: Install build dependencies
         env:
@@ -42,7 +46,7 @@ jobs:
       - name: Upload test package
         uses: actions/upload-artifact@v4
         with:
-          name: pulsepointer-ci-ubuntu-26.04-amd64
+          name: pulsepointer-ci-ubuntu-${{ matrix.ubuntu }}-amd64
           path: dist/*.deb
           if-no-files-found: error
           retention-days: 7
