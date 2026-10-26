@@ -10,6 +10,7 @@ is also the Kubuntu 26.04 package.
 | Distribution | Plasma | Status |
 |---|---:|---|
 | Ubuntu/Kubuntu 26.04 LTS | 6.6 | Supported; Wayland package and optional X11 package |
+| Ubuntu/Kubuntu 26.10 | 6.7 | Supported; Wayland package and optional X11 package |
 | Ubuntu/Kubuntu 25.10 | 6.4 | Not published; interim support ended in July 2026 |
 | Ubuntu/Kubuntu 24.04 LTS | 5.27 | Unsupported; the effect uses the KWin 6 API |
 
@@ -19,9 +20,10 @@ move to archive servers and make poor long-term binary targets.
 
 ## GitHub release workflow
 
-The release workflow builds inside an official `ubuntu:<version>` container.
-This ensures the headers, libraries, dependency names, and generated package
-metadata all come from the target Ubuntu archive.
+The release workflow builds for Ubuntu 26.04 and 26.10 on `amd64`, each inside
+its official `ubuntu:<version>` container. This ensures the headers,
+libraries, dependency names, and generated package metadata all come from
+the target Ubuntu archive.
 
 1. Update the version in `Cargo.toml` and the CMake project.
 2. Merge and verify that the CI workflow passes.
@@ -35,6 +37,8 @@ The package names identify the target, for example:
 ```text
 pulsepointer_0.2.0-1+ubuntu26.04_amd64.deb
 pulsepointer-kwin-x11_0.2.0-1+ubuntu26.04_amd64.deb
+pulsepointer_0.2.0-1+ubuntu26.10_amd64.deb
+pulsepointer-kwin-x11_0.2.0-1+ubuntu26.10_amd64.deb
 ```
 
 For a later KWin update within the same Ubuntu release, run **Build release
@@ -79,7 +83,8 @@ The README should lead with a short Wayland recording or screenshot, followed
 by a prominent compatibility statement and a link to the latest release. Keep
 the first install path simple:
 
-1. Download the `ubuntu26.04` package for the machine architecture.
+1. Download the package matching the Ubuntu release (`ubuntu26.04` or
+   `ubuntu26.10`) and machine architecture.
 2. Run `sudo apt install ./pulsepointer_…deb`.
 3. Log out and back in once.
 

@@ -13,7 +13,8 @@ circle, spectrum, and oscilloscope modes are also included.
 |---|---|
 | Kubuntu 26.04 LTS, Plasma Wayland | Supported |
 | Kubuntu 26.04 LTS, Plasma X11 | Optional companion package |
-| Kubuntu 26.10, Plasma Wayland | Build from source |
+| Kubuntu 26.10, Plasma Wayland | Supported |
+| Kubuntu 26.10, Plasma X11 | Optional companion package |
 | Kubuntu 24.04 LTS / Plasma 5 | Not supported |
 | Other Wayland compositors | Not supported |
 
@@ -23,15 +24,18 @@ private Unix socket. A native KWin effect renders the visualization. This is
 necessary on Wayland, where ordinary applications cannot replace the global
 cursor.
 
-## Install on Kubuntu 26.04
+## Install on Kubuntu 26.04 or 26.10
 
-GitHub releases currently provide `amd64` packages. Download the package from
-the [latest release](https://github.com/simonskrede/pulsepointer/releases/latest)
-and install it:
+Release builds target Ubuntu 26.04 and 26.10 on `amd64`. Download the package
+matching your Ubuntu/Kubuntu release from the
+[latest release](https://github.com/simonskrede/pulsepointer/releases/latest)
+and install it. For example, on 26.04:
 
 ```bash
 sudo apt install ./pulsepointer_0.2.0-1+ubuntu26.04_amd64.deb
 ```
+
+On 26.10, choose the package whose filename contains `ubuntu26.10` instead.
 
 For a Plasma X11 session, install both packages:
 
@@ -71,7 +75,7 @@ ExecStart=/usr/bin/pulsepointer --source alsa_output.example.monitor
 Then run `systemctl --user restart pulsepointer`. The environment variables
 `PULSEPOINTER_SOURCE` and `PULSEPOINTER_LOG=1` remain supported as alternatives.
 
-## Build packages on Kubuntu 26.04
+## Build packages on Kubuntu 26.04 or 26.10
 
 Build on the same fully updated Ubuntu/Kubuntu release and architecture as the
 systems that will install the package. A native KWin effect is tied to the
@@ -112,8 +116,8 @@ Or build the Wayland and X11 packages together:
 ```
 
 The script does not install anything and writes native-architecture packages
-to `dist/`. GitHub's release workflow currently runs this build for Ubuntu
-26.04 on `amd64`. Release revisions and additional distribution targets are
+to `dist/`. GitHub's release workflow runs this build for Ubuntu 26.04 and
+26.10 on `amd64`. Release revisions and additional distribution targets are
 documented in [distribution-packaging.md](docs/distribution-packaging.md).
 
 ## Development checks
