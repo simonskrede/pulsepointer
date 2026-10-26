@@ -51,6 +51,18 @@ constexpr int s_animationIntervalMs = 16;
 constexpr qreal s_ringLogicalSize = 64;
 constexpr qreal s_ringDurationMs = 420;
 
+template<typename Renderer>
+std::unique_ptr<KWin::ImageItem> createImageItem(Renderer *renderer, KWin::Item *parent)
+{
+    // Older KWin renderers create backend-specific image items. Newer KWin
+    // uses a concrete ImageItem that selects its texture backend internally.
+    if constexpr (requires { renderer->createImageItem(parent); }) {
+        return renderer->createImageItem(parent);
+    } else {
+        return std::make_unique<KWin::ImageItem>(parent);
+    }
+}
+
 template<typename T>
 T readLittleEndian(const char *data)
 {
@@ -194,18 +206,18 @@ PulsePointerEffect::PulsePointerEffect()
     Item *const overlayRoot = effects->scene()->overlayItem();
     ItemRenderer *const renderer = effects->scene()->renderer();
 
-    m_overlayItem = renderer->createImageItem(overlayRoot);
+    m_overlayItem = createImageItem(renderer, overlayRoot);
     m_overlayItem->setVisible(false);
 
     m_ringRoot = std::make_unique<Item>(overlayRoot);
     m_ringRoot->setVisible(false);
     m_ringRoot->setZ(0);
-    m_ringItem = renderer->createImageItem(m_ringRoot.get());
+    m_ringItem = createImageItem(renderer, m_ringRoot.get());
 
     m_cursorRoot = std::make_unique<Item>(overlayRoot);
     m_cursorRoot->setVisible(false);
     m_cursorRoot->setZ(1);
-    m_cursorItem = renderer->createImageItem(m_cursorRoot.get());
+    m_cursorItem = createImageItem(renderer, m_cursorRoot.get());
 
     m_screenLocked = effects->isScreenLocked();
 

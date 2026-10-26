@@ -11,6 +11,7 @@ circle, spectrum, and oscilloscope modes are also included.
 |---|---|
 | Kubuntu 26.04 LTS, Plasma Wayland | Supported |
 | Kubuntu 26.04 LTS, Plasma X11 | Optional companion package |
+| Kubuntu 26.10, Plasma Wayland | Build from source |
 | Kubuntu 24.04 LTS / Plasma 5 | Not supported |
 | Other Wayland compositors | Not supported |
 
@@ -73,6 +74,10 @@ Then run `systemctl --user restart pulsepointer`. The environment variables
 Build on the same fully updated Ubuntu/Kubuntu release and architecture as the
 systems that will install the package. A native KWin effect is tied to the
 exact KWin ABI against which it was built.
+
+Source builds support both KWin 6.6 and 6.7. The effect detects the available
+image-item API at compile time, and CI builds on Ubuntu 26.04 and 26.10. Rebuild
+the native effect after upgrading KWin, even when the source is compatible.
 
 Install the complete top-level build requirements for the Wayland package:
 
