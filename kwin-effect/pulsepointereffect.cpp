@@ -196,6 +196,23 @@ void drawCircle(QPainter &painter,
     painter.drawPath(path);
 }
 
+
+template<typename Scene>
+KWin::ItemRenderer *itemRendererForScene(Scene *scene)
+{
+    if constexpr (requires(Scene *candidate) {
+        candidate->renderer();
+    }) {
+        // KWin 6.6 and 6.7
+        return scene->renderer();
+    } else {
+        // KWin 6.8: ImageItem no longer needs an ItemRenderer.
+        Q_UNUSED(scene);
+        return nullptr;
+    }
+}
+
+
 } // namespace
 
 namespace KWin
@@ -204,7 +221,7 @@ namespace KWin
 PulsePointerEffect::PulsePointerEffect()
 {
     Item *const overlayRoot = effects->scene()->overlayItem();
-    ItemRenderer *const renderer = effects->scene()->renderer();
+    ItemRenderer *const renderer = itemRendererForScene(effects->scene());
 
     m_overlayItem = createImageItem(renderer, overlayRoot);
     m_overlayItem->setVisible(false);
