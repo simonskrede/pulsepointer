@@ -18,10 +18,26 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 find_package(Qt6 6.6 REQUIRED COMPONENTS Core DBus Gui Quick Widgets)
 find_package(KF6 6.0 REQUIRED COMPONENTS Config CoreAddons KCMUtils)
 
+include(CTest)
+if(BUILD_TESTING)
+    find_package(Qt6 6.6 REQUIRED COMPONENTS Test)
+
+    add_executable(pulsepointer_cursor_geometry_test ../tests/cursor_geometry_test.cpp)
+    target_include_directories(pulsepointer_cursor_geometry_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(pulsepointer_cursor_geometry_test PRIVATE Qt6::Gui Qt6::Test)
+    add_test(NAME cursor_geometry COMMAND pulsepointer_cursor_geometry_test)
+
+    add_executable(pulsepointer_settings_test ../tests/settings_test.cpp settings.cpp)
+    target_include_directories(pulsepointer_settings_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(pulsepointer_settings_test PRIVATE KF6::ConfigCore Qt6::Test)
+    add_test(NAME effect_settings COMMAND pulsepointer_settings_test)
+endif()
+
 option(PULSEPOINTER_BUILD_KWIN_WAYLAND "Build the KWin Wayland effect" ON)
 option(PULSEPOINTER_BUILD_KWIN_X11 "Build the KWin X11 effect" ON)
 
 set(PULSEPOINTER_EFFECT_SOURCES
+    cursorgeometry.h
     main.cpp
     pulsepointereffect.cpp
     pulsepointereffect.h

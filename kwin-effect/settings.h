@@ -20,6 +20,7 @@ struct Settings
     VisualizationMode mode = VisualizationMode::Elastic;
     int intensity = 100;
     bool beatRing = true;
+    bool hotspotLocator = false;
     quint32 color = 0xCCFF4500;
     int overlaySize = 48;
     int responsiveness = 100;
