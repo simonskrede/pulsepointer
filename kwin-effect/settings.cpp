@@ -36,6 +36,7 @@ Settings Settings::load()
         static_cast<int>(VisualizationMode::Wobble)));
     result.intensity = std::clamp(group.readEntry("Intensity", fallback.intensity), 0, 200);
     result.beatRing = group.readEntry("BeatRing", fallback.beatRing);
+    result.hotspotLocator = group.readEntry("HotspotLocator", fallback.hotspotLocator);
     result.color = group.readEntry("Color", fallback.color);
     result.overlaySize = std::clamp(group.readEntry("OverlaySize", fallback.overlaySize), 16, 128);
     result.responsiveness = std::clamp(
@@ -50,6 +51,7 @@ void Settings::save() const
     group.writeEntry("Mode", static_cast<int>(mode));
     group.writeEntry("Intensity", intensity);
     group.writeEntry("BeatRing", beatRing);
+    group.writeEntry("HotspotLocator", hotspotLocator);
     group.writeEntry("Color", color);
     group.writeEntry("OverlaySize", overlaySize);
     group.writeEntry("Responsiveness", responsiveness);

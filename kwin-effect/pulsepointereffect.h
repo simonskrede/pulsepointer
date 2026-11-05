@@ -51,6 +51,7 @@ private:
     std::unique_ptr<ImageItem> m_ringItem;
     std::unique_ptr<Item> m_cursorRoot;
     std::unique_ptr<ImageItem> m_cursorItem;
+    std::unique_ptr<ImageItem> m_hotspotLocatorItem;
     std::unique_ptr<QSocketNotifier> m_socketNotifier;
     QTimer m_staleTimer;
     QTimer m_animationTimer;
@@ -59,6 +60,7 @@ private:
     QElapsedTimer m_ringClock;
     QString m_socketPath;
     PulsePointer::Settings m_settings;
+    QPointF m_cursorHotSpot;
     std::array<float, 32> m_spectrum{};
     std::array<float, 128> m_waveform{};
     quint32 m_renderedRingColor = 0;

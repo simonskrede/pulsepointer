@@ -145,6 +145,12 @@ Open System Settings, search for Desktop Effects, find PulsePointer, and select 
 
 The GUI controls the mode, intensity, responsiveness, beat ring, color, and overlay size. Changes apply without restarting the daemon.
 
+Elastic and Wobble animations keep the cursor hotspot (the exact click
+position) fixed while the cursor changes shape. Enable **Show a red pixel at
+the cursor hotspot** to mark that point with a tiny red locator that stays
+the same size during animation. This option is off by default and applies to
+the two cursor modes.
+
 The daemon itself has only audio-input and diagnostic options:
 
 ```text
@@ -221,6 +227,7 @@ cargo fmt --check
 cargo clippy --locked --all-targets -- --deny warnings
 cargo test --locked
 ./packaging/build-deb.sh --wayland-only
+ctest --test-dir target/package-build/kwin-wayland --output-on-failure
 ```
 
 The IPC format is documented in [ipc-protocol.md](docs/ipc-protocol.md).

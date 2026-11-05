@@ -1,4 +1,5 @@
 #include "pulsepointereffect.h"
+#include "cursorgeometry.h"
 
 #include "effect/effecthandler.h"
 #include "scene/imageitem.h"
@@ -236,6 +237,16 @@ PulsePointerEffect::PulsePointerEffect()
     m_cursorRoot->setZ(1);
     m_cursorItem = createImageItem(renderer, m_cursorRoot.get());
 
+    // A sibling of the animated image stays at the click position and keeps
+    // its size even while the cursor stretches or wobbles.
+    m_hotspotLocatorItem = createImageItem(renderer, m_cursorRoot.get());
+    QImage locator(1, 1, QImage::Format_ARGB32_Premultiplied);
+    locator.fill(Qt::red);
+    m_hotspotLocatorItem->setImage(locator);
+    m_hotspotLocatorItem->setSize(QSizeF(1, 1));
+    m_hotspotLocatorItem->setZ(1);
+    m_hotspotLocatorItem->setVisible(false);
+
     m_screenLocked = effects->isScreenLocked();
 
     connect(effects, &EffectsHandler::mouseChanged, this,
@@ -292,7 +303,6 @@ void PulsePointerEffect::reconfigure(ReconfigureFlags)
     }
     if (isCursorMode(m_settings.mode)) {
         refreshCursorImage();
-        applyCursorTransform();
     } else if (m_havePacket) {
         renderOverlay();
     }
@@ -531,9 +541,10 @@ void PulsePointerEffect::refreshCursorImage()
     }
 
     const QImage image = cursor.image();
+    m_cursorHotSpot = cursor.hotSpot();
     m_cursorItem->setImage(image);
-    m_cursorItem->setPosition(-cursor.hotSpot());
     m_cursorItem->setSize(image.deviceIndependentSize());
+    applyCursorTransform();
     m_cursorImageAvailable = true;
 
     const qreal devicePixelRatio = std::clamp(image.devicePixelRatio(), 1.0, 4.0);
@@ -602,7 +613,7 @@ void PulsePointerEffect::applyCursorTransform()
         QTransform transform;
         transform.rotate(angle);
         transform.scale(horizontalScale, verticalScale);
-        m_cursorRoot->setTransform(transform);
+        m_cursorItem->setTransform(PulsePointer::cursorImageTransform(m_cursorHotSpot, transform));
         return;
     }
 
@@ -614,7 +625,8 @@ void PulsePointerEffect::applyCursorTransform()
         baseScale * (1.0 + distortion), 0.55, 2.75);
     const qreal verticalScale = std::clamp(
         baseScale * (1.0 - distortion * 0.80), 0.55, 2.25);
-    m_cursorRoot->setTransform(QTransform::fromScale(horizontalScale, verticalScale));
+    m_cursorItem->setTransform(PulsePointer::cursorImageTransform(
+        m_cursorHotSpot, QTransform::fromScale(horizontalScale, verticalScale)));
 }
 
 void PulsePointerEffect::animateCursor()
@@ -681,6 +693,7 @@ void PulsePointerEffect::updateVisibility()
 
     m_overlayItem->setVisible(visible && !cursorMode);
     m_cursorRoot->setVisible(cursorVisible);
+    m_hotspotLocatorItem->setVisible(cursorVisible && m_settings.hotspotLocator);
     setNativeCursorHidden(cursorVisible);
 
     if (!m_settings.beatRing) {
@@ -705,7 +718,7 @@ void PulsePointerEffect::updateVisibility()
     } else {
         m_animationTimer.stop();
         m_ringRoot->setVisible(false);
-        m_cursorRoot->setTransform(QTransform());
+        m_cursorItem->setTransform(PulsePointer::cursorImageTransform(m_cursorHotSpot, QTransform()));
     }
 }
 

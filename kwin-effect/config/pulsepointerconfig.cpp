@@ -73,6 +73,10 @@ PulsePointerConfig::PulsePointerConfig(QObject *parent, const KPluginMetaData &m
     m_beatRing = new QCheckBox(tr("Show a ring on detected beats"), widget());
     form->addRow(QString(), m_beatRing);
 
+    m_hotspotLocator = new QCheckBox(tr("Show a red pixel at the cursor hotspot"), widget());
+    m_hotspotLocator->setToolTip(tr("Mark the exact click position without rotating or scaling the marker."));
+    form->addRow(QString(), m_hotspotLocator);
+
     m_color = new QPushButton(widget());
     form->addRow(tr("Color:"), m_color);
 
@@ -94,6 +98,7 @@ PulsePointerConfig::PulsePointerConfig(QObject *parent, const KPluginMetaData &m
         updateChangeState();
     });
     connect(m_beatRing, &QCheckBox::toggled, this, &PulsePointerConfig::updateChangeState);
+    connect(m_hotspotLocator, &QCheckBox::toggled, this, &PulsePointerConfig::updateChangeState);
     connect(m_overlaySize, &QSpinBox::valueChanged, this, &PulsePointerConfig::updateChangeState);
     connect(m_color, &QPushButton::clicked, this, &PulsePointerConfig::chooseColor);
 
@@ -137,6 +142,7 @@ PulsePointer::Settings PulsePointerConfig::settingsFromWidgets() const
     settings.mode = static_cast<PulsePointer::VisualizationMode>(m_mode->currentData().toInt());
     settings.intensity = m_intensity->value();
     settings.beatRing = m_beatRing->isChecked();
+    settings.hotspotLocator = m_hotspotLocator->isChecked();
     settings.color = m_selectedColor;
     settings.overlaySize = m_overlaySize->value();
     settings.responsiveness = m_responsiveness->value();
@@ -150,6 +156,7 @@ void PulsePointerConfig::setWidgets(const PulsePointer::Settings &settings)
     m_mode->setCurrentIndex(std::max(0, index));
     m_intensity->setValue(settings.intensity);
     m_beatRing->setChecked(settings.beatRing);
+    m_hotspotLocator->setChecked(settings.hotspotLocator);
     m_selectedColor = settings.color;
     m_overlaySize->setValue(settings.overlaySize);
     m_responsiveness->setValue(settings.responsiveness);
@@ -193,6 +200,7 @@ void PulsePointerConfig::updateControlAvailability()
     const bool cursorMode = mode == PulsePointer::VisualizationMode::Elastic
         || mode == PulsePointer::VisualizationMode::Wobble;
     m_beatRing->setEnabled(cursorMode);
+    m_hotspotLocator->setEnabled(cursorMode);
     m_responsiveness->setEnabled(cursorMode);
     m_overlaySize->setEnabled(!cursorMode);
 }

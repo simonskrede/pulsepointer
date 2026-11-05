@@ -34,6 +34,7 @@ private:
     QSlider *m_intensity = nullptr;
     QLabel *m_intensityValue = nullptr;
     QCheckBox *m_beatRing = nullptr;
+    QCheckBox *m_hotspotLocator = nullptr;
     QPushButton *m_color = nullptr;
     QSpinBox *m_overlaySize = nullptr;
     QSlider *m_responsiveness = nullptr;
