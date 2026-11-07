@@ -1,6 +1,6 @@
 #pragma once
 
-#include "effect/effect.h"
+#include "paintcompat.h"
 #include "settings.h"
 #include "musicmotion.h"
 
@@ -24,15 +24,6 @@ namespace KWin
 class ImageItem;
 class Item;
 class ScreenRenderer;
-
-// KWin 6.8 changed paintScreen's result from void to bool.
-template<typename> struct ScreenPaintSignature;
-template<typename R, typename C, typename... Args>
-struct ScreenPaintSignature<R (C::*)(Args...)> {
-    using Result = R;
-    using Arguments = std::tuple<Args...>;
-};
-using ScreenPaint = ScreenPaintSignature<decltype(&Effect::paintScreen)>;
 
 class PulsePointerEffect : public Effect
 {

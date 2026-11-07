@@ -25,7 +25,7 @@ jobs:
           apt-get update
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
-            kwin-dev libdrm-dev libkf6globalaccel-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
+            kwin-dev kwin-x11-dev libdrm-dev libkf6globalaccel-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
             libegl-mesa0 libgles2 rust-clippy rustfmt
 
       - name: Check out source
@@ -40,11 +40,13 @@ jobs:
       - name: Test Rust
         run: cargo test --locked
 
-      - name: Build Wayland package
-        run: ./packaging/build-deb.sh --wayland-only
+      - name: Build Wayland and X11 packages
+        run: ./packaging/build-deb.sh
 
       - name: Test cursor, settings, audio motion, and screen shaders
-        run: ctest --test-dir target/package-build/kwin-wayland --output-on-failure --no-tests=error
+        run: |
+          ctest --test-dir target/package-build/kwin-wayland --output-on-failure --no-tests=error
+          ctest --test-dir target/package-build/kwin-x11 --output-on-failure --no-tests=error
 
       - name: Upload test package
         uses: actions/upload-artifact@v4

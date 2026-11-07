@@ -60,6 +60,7 @@ set(PULSEPOINTER_EFFECT_SOURCES
     hotspotlocator.h
     effectcatalog.h
     musicmotion.h
+    paintcompat.h
     screenrenderer.cpp
     screenrenderer.h
     shaders.qrc

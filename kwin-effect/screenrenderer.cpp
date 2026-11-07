@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <optional>
+#include <utility>
 
 namespace KWin
 {
@@ -75,21 +77,39 @@ QVector4D vector(const std::array<float, 4> &values)
 {
     return {values[0], values[1], values[2], values[3]};
 }
+template<typename Target>
+const ColorDescription &colorDescription(const Target &target)
+{
+    if constexpr (requires { target.colorDescription().get(); }) {
+        return *target.colorDescription();
+    } else {
+        return target.colorDescription();
+    }
+}
+template<typename Viewport>
+OutputTransform viewportTransform(const Viewport &viewport, const RenderTarget &target)
+{
+    if constexpr (requires { viewport.transform(); }) {
+        return viewport.transform();
+    } else {
+        return target.transform();
+    }
+}
 } // namespace
 
 struct ScreenRenderer::Private {
     struct OutputState {
         Capture scene;
         Capture history;
-        RectF geometry;
+        decltype(std::declval<RenderViewport>().renderRect()) geometry;
         OutputTransform transform;
-        const ColorDescription *colors = nullptr;
+        std::optional<ColorDescription> colors;
         bool historyValid = false;
         QElapsedTimer frameClock;
     };
     std::unique_ptr<GLShader> shader;
     std::unique_ptr<GLTexture> audio;
-    std::map<LogicalOutput *, OutputState> outputs;
+    std::map<ScreenOutput, OutputState> outputs;
     bool failed = false;
     bool initialized = false;
 
@@ -141,7 +161,7 @@ void ScreenRenderer::invalidateHistory()
 }
 
 bool ScreenRenderer::render(const RenderTarget &target, const RenderViewport &viewport,
-                            LogicalOutput *screen, const PulsePointer::Settings &settings,
+                            ScreenOutput screen, const PulsePointer::Settings &settings,
                             const PulsePointer::MusicMotion &motion,
                             const std::array<float, 32> &spectrum,
                             const std::array<float, 128> &waveform, const QPointF &cursor)
@@ -169,13 +189,15 @@ bool ScreenRenderer::render(const RenderTarget &target, const RenderViewport &vi
         }
         output.historyValid = false;
     }
-    if (output.geometry != geometry || output.transform != viewport.transform()
-        || output.colors != target.colorDescription().get()) {
+    const auto transform = viewportTransform(viewport, target);
+    const auto &colors = colorDescription(target);
+    if (output.geometry != geometry || output.transform != transform
+        || !output.colors || *output.colors != colors) {
         output.historyValid = false;
     }
     output.geometry = geometry;
-    output.transform = viewport.transform();
-    output.colors = target.colorDescription().get();
+    output.transform = transform;
+    output.colors = colors;
     const bool needsHistory = settings.strength(PulsePointer::ScreenEffect::Feedback) > 0
         || settings.strength(PulsePointer::ScreenEffect::ColorEchoes) > 0;
     if (needsHistory && (!output.history.texture || output.history.texture->size() != captureSize)) {
@@ -190,8 +212,8 @@ bool ScreenRenderer::render(const RenderTarget &target, const RenderViewport &vi
         output.history.texture.reset();
         output.historyValid = false;
     }
-    if (!output.scene.framebuffer->blitFromRenderTarget(target, viewport, geometry.toRect(),
-                                                      Rect(QPoint(), captureSize))) {
+    const auto captureRect = decltype(geometry.toRect())(QPoint(), captureSize);
+    if (!output.scene.framebuffer->blitFromRenderTarget(target, viewport, geometry.toRect(), captureRect)) {
         output.historyValid = false;
         return false;
     }
@@ -269,7 +291,7 @@ bool ScreenRenderer::render(const RenderTarget &target, const RenderViewport &vi
 
     if (needsHistory) {
         output.historyValid = output.history.framebuffer->blitFromRenderTarget(
-            target, viewport, geometry.toRect(), Rect(QPoint(), captureSize));
+            target, viewport, geometry.toRect(), captureRect);
     }
     return true;
 }
