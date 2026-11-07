@@ -26,7 +26,7 @@ jobs:
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
             kwin-dev libdrm-dev libkf6globalaccel-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
-            libegl-mesa0 rust-clippy rustfmt
+            libegl-mesa0 libgles2 rust-clippy rustfmt
 
       - name: Check out source
         uses: actions/checkout@v6

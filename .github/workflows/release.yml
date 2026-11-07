@@ -45,7 +45,7 @@ jobs:
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
             kwin-dev kwin-x11-dev libdrm-dev libkf6globalaccel-dev libkf6kcmutils-dev libpulse-dev \
-            ninja-build pkg-config libegl-mesa0
+            ninja-build pkg-config libegl-mesa0 libgles2
 
       - name: Check out release tag
         uses: actions/checkout@v6

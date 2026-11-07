@@ -371,13 +371,21 @@ bool PulsePointerEffect::screenEffectsActive() const
         && m_settings.hasScreenEffects() && m_motion.moving() && m_screenRenderer->available();
 }
 
+#if PULSEPOINTER_PREPAINT_PRESENT_TIME
+void PulsePointerEffect::prePaintScreen(ScreenPrePaintData &data, std::chrono::milliseconds presentTime)
+#else
 void PulsePointerEffect::prePaintScreen(ScreenPrePaintData &data)
+#endif
 {
     if (screenEffectsActive()) {
         // Sampling/displacement and temporal effects require a fresh, complete scene.
         data.mask |= PAINT_SCREEN_TRANSFORMED;
     }
+#if PULSEPOINTER_PREPAINT_PRESENT_TIME
+    effects->prePaintScreen(data, presentTime);
+#else
     effects->prePaintScreen(data);
+#endif
 }
 
 ScreenPaint::Result PulsePointerEffect::paintScreen(

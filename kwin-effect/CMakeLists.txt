@@ -96,6 +96,23 @@ function(pulsepointer_add_config_plugin target install_namespace)
     )
 endfunction()
 
+function(pulsepointer_configure_paint_api target kwin_target)
+    # KWin 6.6 passes a presentation timestamp; newer Wayland KWin versions
+    # omit it. Probe the actual API, including independently versioned X11 builds.
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_LIBRARIES ${kwin_target})
+    check_cxx_source_compiles("
+        #include <effect/effect.h>
+        #include <chrono>
+        #include <type_traits>
+        static_assert(std::is_same_v<decltype(&KWin::Effect::prePaintScreen),
+            void (KWin::Effect::*)(KWin::ScreenPrePaintData &, std::chrono::milliseconds)>);
+        int main() { return 0; }
+    " ${target}_PREPAINT_PRESENT_TIME)
+    target_compile_definitions(${target} PRIVATE
+        PULSEPOINTER_PREPAINT_PRESENT_TIME=$<BOOL:${${target}_PREPAINT_PRESENT_TIME}>)
+endfunction()
+
 if(PULSEPOINTER_BUILD_KWIN_WAYLAND)
     find_package(KWin 6.0 REQUIRED)
     kcoreaddons_add_plugin(pulsepointer_kwin
@@ -113,6 +130,7 @@ if(PULSEPOINTER_BUILD_KWIN_WAYLAND)
         Qt6::Gui
         KF6::ConfigCore
     )
+    pulsepointer_configure_paint_api(pulsepointer_kwin KWin::kwin)
     pulsepointer_add_config_plugin(pulsepointer_config "kwin/effects/configs")
 endif()
 
@@ -133,6 +151,7 @@ if(PULSEPOINTER_BUILD_KWIN_X11)
         Qt6::Gui
         KF6::ConfigCore
     )
+    pulsepointer_configure_paint_api(pulsepointer_kwin_x11 KWinX11::kwin)
     pulsepointer_add_config_plugin(pulsepointer_config_x11 "kwin-x11/effects/configs")
 endif()
 

@@ -258,7 +258,7 @@ The script does not install anything and writes native-architecture packages to 
 
 ## Development checks
 
-Install `rust-clippy` and `rustfmt` in addition to the package-build requirements, then run:
+Install `rust-clippy`, `rustfmt`, `libegl-mesa0`, and `libgles2` in addition to the package-build requirements, then run:
 
 ```bash
 cargo fmt --check

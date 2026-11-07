@@ -5,6 +5,7 @@
 #include "musicmotion.h"
 
 #include <tuple>
+#include <chrono>
 
 #include <QElapsedTimer>
 #include <QPointF>
@@ -43,7 +44,11 @@ public:
 
     bool isActive() const override;
     void reconfigure(ReconfigureFlags flags) override;
+#if PULSEPOINTER_PREPAINT_PRESENT_TIME
+    void prePaintScreen(ScreenPrePaintData &data, std::chrono::milliseconds presentTime) override;
+#else
     void prePaintScreen(ScreenPrePaintData &data) override;
+#endif
     ScreenPaint::Result paintScreen(const RenderTarget &target, const RenderViewport &viewport,
                                     int mask, std::tuple_element_t<3, ScreenPaint::Arguments> region,
                                     std::tuple_element_t<4, ScreenPaint::Arguments> screen) override;
