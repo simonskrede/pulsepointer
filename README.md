@@ -4,7 +4,32 @@
 
 [![CI](https://github.com/simonskrede/pulsepointer/actions/workflows/ci.yml/badge.svg)](https://github.com/simonskrede/pulsepointer/actions/workflows/ci.yml)
 
-PulsePointer makes the mouse pointer react to system audio in KDE Plasma 6. The default elastic mode expands and squashes the current cursor and can emit a ring on detected beats. Wobble cursor, spectrum halo, level bar, waveform circle, spectrum, and oscilloscope modes are also included.
+PulsePointer makes the pointer and desktop react to system audio in KDE Plasma 6. Combine Elastic or Wobble cursor animation with pointer visualizers and 20 independent screen effects: breathing or spiked borders, saturation and hue changes, ripples, auroras, particles, and more. The default remains an elastic cursor with a ring on musical attacks; screen effects start off.
+
+## New in 0.4.0: the whole desktop joins in
+
+**This is a major feature expansion.** Your music can light up the screen edges,
+send glass-like ripples out from the mouse pointer, sweep auroras across the
+desktop, and leave echoes of color behind.
+
+- **20 screen effects to mix:** breathing frames, spectrum-driven spikes, liquid
+  borders, corner shockwaves, hue tides, gravity wells, refractive ripples, prism
+  kicks, particles, feedback ghosts, and more.
+- **Build your own combination:** run Elastic or Wobble alongside any of the five
+  pointer visualizers, the attack ring, and your favorite screen effects. Each
+  screen effect has its own strength control.
+- **Five starting points:** try Velvet, Voltage, Underwater, Aurora, or Meltdown,
+  then tune the result to your music.
+- **More control:** adjust border shapes, rise and fade times, separate pointer
+  and screen intensity, and whether effects cover all displays or just the one
+  containing the pointer. Bypass everything with **Meta+Ctrl+Alt+P**.
+- **A precise pointer:** refractive ripples follow the mouse, and the optional
+  hotspot locator is now a small, smooth red circle centered on the click point.
+
+Existing settings migrate automatically, and screen effects stay off until you
+enable them. Start with a preset under **System Settings → Desktop Effects →
+PulsePointer**. See the [effect guide](docs/music-effects.md) for every effect and
+the [changelog](CHANGELOG.md) for release details.
 
 ## Supported environments
 
@@ -28,7 +53,7 @@ Release builds target Ubuntu 26.04 and 26.10 on `amd64`. Download the package ma
 For example, on 26.04:
 
 ```bash
-sudo apt install ./pulsepointer_0.3.0-1+ubuntu26.04_amd64.deb
+sudo apt install ./pulsepointer_0.4.0-1+ubuntu26.04_amd64.deb
 ```
 
 On 26.10, choose the package whose filename contains `ubuntu26.10` instead.
@@ -36,8 +61,8 @@ On 26.10, choose the package whose filename contains `ubuntu26.10` instead.
 For a Plasma X11 session, install both packages:
 
 ```bash
-sudo apt install ./pulsepointer_0.3.0-1+ubuntu26.04_amd64.deb \
-  ./pulsepointer-kwin-x11_0.3.0-1+ubuntu26.04_amd64.deb
+sudo apt install ./pulsepointer_0.4.0-1+ubuntu26.04_amd64.deb \
+  ./pulsepointer-kwin-x11_0.4.0-1+ubuntu26.04_amd64.deb
 ```
 
 Log out and back in once so KWin discovers the native effect. The package enables the effect and the `pulsepointer.service` user service by default.
@@ -111,7 +136,7 @@ Open:
 
 **System Settings → Desktop Effects → PulsePointer**
 
-You can configure the visualization mode, intensity, responsiveness, beat ring, color, and overlay size.
+Choose a preset or combine cursor, border, desktop color, and atmosphere effects independently. Each screen effect has its own strength and description.
 
 ### Uninstallation
 
@@ -143,13 +168,26 @@ The installation is local and does not require an AUR package, a third-party pac
 
 Open System Settings, search for Desktop Effects, find PulsePointer, and select its configure button.
 
-The GUI controls the mode, intensity, responsiveness, beat ring, color, and overlay size. Changes apply without restarting the daemon.
+The settings have five pages:
+
+- **Mouse pointer:** choose Unchanged, Elastic, or Wobble, and freely combine level bar, waveform circle, spectrum bars, oscilloscope, and spectrum halo. The attack ring works independently too.
+- **Screen borders:** enable any of six border effects, choose a smooth, rounded, triangular, or spiked profile, and adjust reach, density, and softness.
+- **Desktop color:** combine saturation breathing, bass bloom, spectral lighting, hue tides, selective color, and color echoes.
+- **Atmosphere & distortion:** mix gravity, refraction, prism kicks, aurora curtains, terrain, particles, feedback, and drop collapse.
+- **Timing & displays:** set screen intensity, rise and fade times, and all displays or only the display containing the pointer.
+
+The shared accent color applies to the pointer and decorative screen layers. Screen intensity is separate from pointer intensity. Every screen effect has an on/off checkbox, a description, and its own strength. **Use preset** fills in a combination that you can then adjust: Velvet, Voltage, Underwater, Aurora, or Meltdown. Press **Apply** to use your changes without restarting the daemon.
+
+**Meta+Ctrl+Alt+P** temporarily bypasses or resumes every layer. Customize **Toggle PulsePointer** under System Settings → Shortcuts → KWin. The settings also have a persistent master enable switch. Existing configurations migrate automatically, preserving the previous cursor or pointer visualization without enabling screen effects.
+
+Screen effects use OpenGL; pointer effects remain available if the screen renderer cannot initialize. Effects fade during silence and disappear when audio disconnects or the screen locks. See [music-effects.md](docs/music-effects.md) for the effect guide and rendering details.
 
 Elastic and Wobble animations keep the cursor hotspot (the exact click
-position) fixed while the cursor changes shape. Enable **Show a red pixel at
-the cursor hotspot** to mark that point with a tiny red locator that stays
-the same size during animation. This option is off by default and applies to
-the two cursor modes.
+position) fixed while the cursor changes shape. Enable **Show a red marker at
+the cursor hotspot** to mark that point with a small red circle. The marker
+is centered on the click position, measures 5 logical pixels across, follows
+display scaling, and stays the same size during animation. This option is off
+by default and works with Unchanged, Elastic, and Wobble cursors.
 
 The daemon itself has only audio-input and diagnostic options:
 
@@ -193,7 +231,7 @@ Install the complete top-level build requirements for the Wayland package:
 ```bash
 sudo apt update
 sudo apt install build-essential ca-certificates cargo cmake extra-cmake-modules \
-  kwin-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config
+  kwin-dev libkf6globalaccel-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config
 ```
 
 `kwin-dev` supplies its required Qt 6, KF6 Config/CoreAddons, Epoxy, and Wayland development dependencies. `build-essential` supplies the C/C++ and Debian package toolchain. The first build also needs access to crates.io unless the locked Rust dependencies are already cached.
@@ -229,6 +267,8 @@ cargo test --locked
 ./packaging/build-deb.sh --wayland-only
 ctest --test-dir target/package-build/kwin-wayland --output-on-failure
 ```
+
+Native tests cover cursor geometry, hotspot-marker shape and placement across display scales, settings migration and combinations, settings-dialog persistence, time-based audio envelopes, and actual shader rendering for every screen effect. Shader tests use surfaceless EGL with Mesa software rendering and skip when EGL is unavailable. To save test previews, set `PULSEPOINTER_TEST_ARTIFACTS=/tmp/pulsepointer-previews` when running `ctest`.
 
 The IPC format is documented in [ipc-protocol.md](docs/ipc-protocol.md).
 

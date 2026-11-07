@@ -1,5 +1,13 @@
 #include "pulsepointereffect.h"
 #include "cursorgeometry.h"
+#include "hotspotlocator.h"
+#include "screenrenderer.h"
+#include "core/renderviewport.h"
+
+#include <KGlobalAccel>
+#include <QAction>
+#include <QKeySequence>
+#include <type_traits>
 
 #include "effect/effecthandler.h"
 #include "scene/imageitem.h"
@@ -98,10 +106,28 @@ qreal elasticIntensity(const PulsePointer::Settings &settings)
         : linearIntensity * linearIntensity;
 }
 
-bool isCursorMode(PulsePointer::VisualizationMode mode)
+bool isCursorMode(PulsePointer::CursorAnimation mode)
 {
-    return mode == PulsePointer::VisualizationMode::Elastic
-        || mode == PulsePointer::VisualizationMode::Wobble;
+    return mode != PulsePointer::CursorAnimation::None;
+}
+
+template<typename Handler, typename... Args>
+bool paintNext(Handler *handler, Args &&...args)
+{
+    if constexpr (std::is_void_v<decltype(handler->paintScreen(std::forward<Args>(args)...))>) {
+        handler->paintScreen(std::forward<Args>(args)...);
+        return true;
+    } else {
+        return handler->paintScreen(std::forward<Args>(args)...);
+    }
+}
+
+template<typename Result>
+Result paintResult(bool success)
+{
+    if constexpr (!std::is_void_v<Result>) {
+        return success;
+    }
 }
 
 void drawBar(QPainter &painter, const QRectF &bounds, float level, qreal amplitude)
@@ -240,22 +266,41 @@ PulsePointerEffect::PulsePointerEffect()
     // A sibling of the animated image stays at the click position and keeps
     // its size even while the cursor stretches or wobbles.
     m_hotspotLocatorItem = createImageItem(renderer, m_cursorRoot.get());
-    QImage locator(1, 1, QImage::Format_ARGB32_Premultiplied);
-    locator.fill(Qt::red);
+    const QImage locator = PulsePointer::hotspotLocatorImage();
     m_hotspotLocatorItem->setImage(locator);
-    m_hotspotLocatorItem->setSize(QSizeF(1, 1));
+    m_hotspotLocatorItem->setSize(locator.deviceIndependentSize());
+    // Use a transform to preserve the half-pixel offset when KWin snaps item
+    // positions. The center of the red circle is the exact click position.
+    m_hotspotLocatorItem->setTransform(PulsePointer::cursorImageTransform(
+        QRectF(QPointF(), locator.deviceIndependentSize()).center(), QTransform()));
     m_hotspotLocatorItem->setZ(1);
     m_hotspotLocatorItem->setVisible(false);
 
+    m_screenRenderer = std::make_unique<ScreenRenderer>();
+    auto *bypass = new QAction(this);
+    bypass->setObjectName(QStringLiteral("Toggle PulsePointer"));
+    bypass->setText(tr("Toggle PulsePointer"));
+    KGlobalAccel::self()->setDefaultShortcut(bypass, {QKeySequence(Qt::META | Qt::CTRL | Qt::ALT | Qt::Key_P)});
+    KGlobalAccel::self()->setShortcut(bypass, {QKeySequence(Qt::META | Qt::CTRL | Qt::ALT | Qt::Key_P)});
+    connect(bypass, &QAction::triggered, this, [this] {
+        m_bypassed = !m_bypassed;
+        updateVisibility();
+        effects->addRepaintFull();
+    });
     m_screenLocked = effects->isScreenLocked();
 
     connect(effects, &EffectsHandler::mouseChanged, this,
             [this](const QPointF &position, const QPointF &, Qt::MouseButtons, Qt::MouseButtons,
                    Qt::KeyboardModifiers, Qt::KeyboardModifiers) {
+                if (m_settings.monitors == PulsePointer::MonitorScope::Pointer
+                    && effects->screenAt(position.toPoint()) != effects->screenAt(m_cursorRoot->position().toPoint())) {
+                    m_screenRenderer->invalidateHistory();
+                    effects->addRepaintFull();
+                }
                 updatePosition(position);
             });
     connect(effects, &EffectsHandler::cursorShapeChanged, this, [this] {
-        if (isCursorMode(m_settings.mode)) {
+        if (isCursorMode(m_settings.cursor) || m_settings.hotspotLocator) {
             refreshCursorImage();
             updateVisibility();
         }
@@ -288,7 +333,8 @@ PulsePointerEffect::~PulsePointerEffect()
 
 bool PulsePointerEffect::isActive() const
 {
-    return (m_overlayItem && m_overlayItem->isVisible())
+    return screenEffectsActive()
+        || (m_overlayItem && m_overlayItem->isVisible())
         || (m_cursorRoot && m_cursorRoot->isVisible())
         || (m_ringRoot && m_ringRoot->isVisible());
 }
@@ -301,13 +347,60 @@ void PulsePointerEffect::reconfigure(ReconfigureFlags)
     if (m_settings.color != previous.color) {
         rebuildRingImage();
     }
-    if (isCursorMode(m_settings.mode)) {
+    if (isCursorMode(m_settings.cursor) || m_settings.hotspotLocator) {
         refreshCursorImage();
-    } else if (m_havePacket) {
+    }
+    if (m_havePacket && m_settings.pointerVisualizations) {
         renderOverlay();
+    }
+    m_screenRenderer->invalidateHistory();
+    if (!m_settings.hasScreenEffects()) {
+        // reconfigure is called with the compositor GL context current.
+        m_screenRenderer = std::make_unique<ScreenRenderer>();
     }
     updatePosition(effects->cursorPos());
     updateVisibility();
+    effects->addRepaintFull();
+}
+
+bool PulsePointerEffect::screenEffectsActive() const
+{
+    return m_settings.enabled && !m_bypassed && !m_screenLocked
+        && m_havePacket && m_lastPacketTimer.isValid()
+        && m_lastPacketTimer.elapsed() < s_staleTimeoutMs
+        && m_settings.hasScreenEffects() && m_motion.moving() && m_screenRenderer->available();
+}
+
+void PulsePointerEffect::prePaintScreen(ScreenPrePaintData &data)
+{
+    if (screenEffectsActive()) {
+        // Sampling/displacement and temporal effects require a fresh, complete scene.
+        data.mask |= PAINT_SCREEN_TRANSFORMED;
+    }
+    effects->prePaintScreen(data);
+}
+
+ScreenPaint::Result PulsePointerEffect::paintScreen(
+    const RenderTarget &target, const RenderViewport &viewport, int mask,
+    std::tuple_element_t<3, ScreenPaint::Arguments> region,
+    std::tuple_element_t<4, ScreenPaint::Arguments> screen)
+{
+    const bool success = paintNext(effects, target, viewport, mask, region, screen);
+    if (success && screenEffectsActive()) {
+        const bool selected = m_settings.monitors == PulsePointer::MonitorScope::All
+            || viewport.renderRect().contains(effects->cursorPos());
+        if (selected) {
+            m_screenRenderer->render(target, viewport, screen, m_settings, m_motion,
+                                     m_spectrum, m_waveform, effects->cursorPos());
+        }
+    }
+    return paintResult<ScreenPaint::Result>(success);
+}
+
+bool PulsePointerEffect::blocksDirectScanout() const
+{
+    // Pointer overlays also need compositing, including over fullscreen apps.
+    return isActive();
 }
 
 bool PulsePointerEffect::openSocket()
@@ -446,23 +539,29 @@ bool PulsePointerEffect::applyTelemetry(const QByteArray &packet)
     m_waveform = waveform;
     m_onsetPulse = std::max(m_onsetPulse, onset);
 
-    if (m_settings.beatRing
-        && isCursorMode(m_settings.mode)
+    if (m_settings.beatRing && m_settings.intensity > 0
         && onset >= 0.12f && m_lastOnset < 0.12f) {
-        m_ringStrength = onset * (0.6f + 0.4f * treble);
+        m_ringStrength = onset * (0.6f + 0.4f * treble)
+            * std::min(1.0f, m_settings.intensity / 100.0f);
         m_ringClock.restart();
     }
     m_lastOnset = onset;
+    if (m_settings.enabled && !m_bypassed && !m_screenLocked) {
+        m_motion.audio(level, bass, midrange, treble, onset);
+    }
 
     m_havePacket = true;
     m_lastPacketTimer.restart();
     m_staleTimer.start();
-    if (isCursorMode(m_settings.mode)) {
-        if (!m_cursorImageAvailable) {
-            refreshCursorImage();
+    if (m_settings.enabled && !m_bypassed && !m_screenLocked) {
+        if (isCursorMode(m_settings.cursor) || m_settings.hotspotLocator) {
+            if (!m_cursorImageAvailable) {
+                refreshCursorImage();
+            }
         }
-    } else {
-        renderOverlay();
+        if (m_settings.pointerVisualizations) {
+            renderOverlay();
+        }
     }
     updatePosition(effects->cursorPos());
     updateVisibility();
@@ -494,27 +593,34 @@ void PulsePointerEffect::renderOverlay()
 
     const QRectF bounds(0, 0, logicalSize, logicalSize);
     const qreal amplitude = visualizationAmplitude(m_settings);
-    switch (m_settings.mode) {
-    case PulsePointer::VisualizationMode::Bar:
-        drawBar(painter, bounds, m_level, amplitude);
-        break;
-    case PulsePointer::VisualizationMode::Circle:
-        painter.setBrush(Qt::NoBrush);
-        drawCircle(painter, bounds, m_waveform, amplitude);
-        break;
-    case PulsePointer::VisualizationMode::Spectrum:
-        drawSpectrum(painter, bounds, m_spectrum, amplitude);
-        break;
-    case PulsePointer::VisualizationMode::Oscilloscope:
-        painter.setBrush(Qt::NoBrush);
-        drawOscilloscope(painter, bounds, m_waveform, amplitude);
-        break;
-    case PulsePointer::VisualizationMode::SpectrumHalo:
-        drawSpectrumHalo(painter, bounds, m_spectrum, amplitude);
-        break;
-    case PulsePointer::VisualizationMode::Elastic:
-    case PulsePointer::VisualizationMode::Wobble:
-        break;
+    for (int value = 1; value <= 5; ++value) {
+        const auto mode = static_cast<PulsePointer::VisualizationMode>(value);
+        if (!(m_settings.pointerVisualizations & PulsePointer::pointerBit(mode))) {
+            continue;
+        }
+        painter.setBrush(color);
+        switch (mode) {
+        case PulsePointer::VisualizationMode::Bar:
+            drawBar(painter, bounds, m_level, amplitude);
+            break;
+        case PulsePointer::VisualizationMode::Circle:
+            painter.setBrush(Qt::NoBrush);
+            drawCircle(painter, bounds, m_waveform, amplitude);
+            break;
+        case PulsePointer::VisualizationMode::Spectrum:
+            drawSpectrum(painter, bounds, m_spectrum, amplitude);
+            break;
+        case PulsePointer::VisualizationMode::Oscilloscope:
+            painter.setBrush(Qt::NoBrush);
+            drawOscilloscope(painter, bounds, m_waveform, amplitude);
+            break;
+        case PulsePointer::VisualizationMode::SpectrumHalo:
+            drawSpectrumHalo(painter, bounds, m_spectrum, amplitude);
+            break;
+        case PulsePointer::VisualizationMode::Elastic:
+        case PulsePointer::VisualizationMode::Wobble:
+            break;
+        }
     }
     painter.end();
 
@@ -557,7 +663,7 @@ void PulsePointerEffect::refreshCursorImage()
 
 void PulsePointerEffect::rebuildRingImage()
 {
-    if (m_settings.color == 0 || m_renderedDevicePixelRatio <= 0) {
+    if (m_renderedDevicePixelRatio <= 0) {
         return;
     }
 
@@ -588,8 +694,12 @@ float PulsePointerEffect::targetCursorEnergy() const
 
 void PulsePointerEffect::applyCursorTransform()
 {
+    if (!isCursorMode(m_settings.cursor)) {
+        m_cursorItem->setTransform(PulsePointer::cursorImageTransform(m_cursorHotSpot, QTransform()));
+        return;
+    }
     const qreal intensity = elasticIntensity(m_settings);
-    if (m_settings.mode == PulsePointer::VisualizationMode::Wobble) {
+    if (m_settings.cursor == PulsePointer::CursorAnimation::Wobble) {
         const qreal activity = std::clamp<qreal>(
             m_currentEnergy * 1.5 + m_onsetPulse, 0, 1);
         const qreal wave = std::sin(m_wobblePhase);
@@ -633,7 +743,7 @@ void PulsePointerEffect::animateCursor()
 {
     const bool fresh = m_havePacket && m_lastPacketTimer.isValid()
         && m_lastPacketTimer.elapsed() < s_staleTimeoutMs;
-    if (!isCursorMode(m_settings.mode) || !fresh || m_screenLocked) {
+    if (!fresh || m_screenLocked || !m_settings.enabled || m_bypassed) {
         updateVisibility();
         return;
     }
@@ -649,13 +759,23 @@ void PulsePointerEffect::animateCursor()
     const qreal response = 1.0 - std::exp(-elapsedSeconds / timeConstant);
     m_currentEnergy += (targetEnergy - m_currentEnergy) * response;
     m_onsetPulse *= std::exp(-elapsedSeconds / (0.170 / responsiveness));
-    if (m_settings.mode == PulsePointer::VisualizationMode::Wobble) {
+    if (m_settings.cursor == PulsePointer::CursorAnimation::Wobble) {
         m_wobblePhase = std::fmod(
             m_wobblePhase + elapsedSeconds * (4.0 + 5.0 * m_bass + 9.0 * m_treble),
             2.0 * std::numbers::pi);
     }
 
-    applyCursorTransform();
+    if (isCursorMode(m_settings.cursor)) {
+        applyCursorTransform();
+    }
+    const bool screenWasActive = screenEffectsActive();
+    m_motion.advance(elapsedSeconds, m_settings.attackMs, m_settings.releaseMs);
+    if (screenWasActive || screenEffectsActive()) {
+        effects->addRepaintFull();
+        if (!m_motion.moving()) {
+            m_screenRenderer->invalidateHistory();
+        }
+    }
 
     bool ringActive = false;
     if (m_settings.beatRing && m_ringClock.isValid()) {
@@ -673,12 +793,14 @@ void PulsePointerEffect::animateCursor()
         }
     }
 
-    const bool wobbleActive = m_settings.mode == PulsePointer::VisualizationMode::Wobble
+    const bool wobbleActive = isCursorMode(m_settings.cursor) && m_cursorImageAvailable
+        && m_settings.cursor == PulsePointer::CursorAnimation::Wobble
         && (targetEnergy >= 0.005 || m_currentEnergy >= 0.005);
     if (std::abs(targetEnergy - m_currentEnergy) < 0.001
         && m_onsetPulse < 0.002
         && !wobbleActive
-        && !ringActive) {
+        && !ringActive
+        && !(screenEffectsActive() && m_motion.moving())) {
         m_animationTimer.stop();
     }
 }
@@ -687,38 +809,51 @@ void PulsePointerEffect::updateVisibility()
 {
     const bool fresh = m_havePacket && m_lastPacketTimer.isValid()
         && m_lastPacketTimer.elapsed() < s_staleTimeoutMs;
-    const bool visible = fresh && !m_screenLocked;
-    const bool cursorMode = isCursorMode(m_settings.mode);
-    const bool cursorVisible = visible && cursorMode && m_cursorImageAvailable;
-
-    m_overlayItem->setVisible(visible && !cursorMode);
+    const bool visible = fresh && !m_screenLocked && m_settings.enabled && !m_bypassed;
+    const bool wasVisible = m_visualsVisible;
+    m_visualsVisible = visible;
+    // Replace even an unchanged native cursor when marking its hotspot, so a
+    // hardware cursor cannot cover the locator. Its image keeps an identity
+    // animation transform in that mode.
+    const bool cursorVisible = visible && (isCursorMode(m_settings.cursor) || m_settings.hotspotLocator)
+        && m_cursorImageAvailable;
+    m_overlayItem->setVisible(visible && m_settings.pointerVisualizations != 0);
     m_cursorRoot->setVisible(cursorVisible);
     m_hotspotLocatorItem->setVisible(cursorVisible && m_settings.hotspotLocator);
     setNativeCursorHidden(cursorVisible);
 
-    if (!m_settings.beatRing) {
+    if (visible && m_settings.beatRing && m_renderedDevicePixelRatio <= 0) {
+        m_renderedDevicePixelRatio = 1;
+        rebuildRingImage();
+    }
+    if (!visible || !m_settings.beatRing) {
         m_ringClock.invalidate();
         m_ringRoot->setVisible(false);
     }
-
-    if (cursorVisible) {
-        const bool ringActive = m_settings.beatRing && m_ringClock.isValid()
-            && m_ringClock.elapsed() < s_ringDurationMs;
-        const float targetEnergy = targetCursorEnergy();
-        const bool wobbleActive = m_settings.mode == PulsePointer::VisualizationMode::Wobble
-            && (targetEnergy >= 0.005 || m_currentEnergy >= 0.005);
-        const bool animationNeeded = std::abs(targetEnergy - m_currentEnergy) >= 0.001
-            || m_onsetPulse >= 0.002
-            || wobbleActive
-            || ringActive;
-        if (animationNeeded && !m_animationTimer.isActive()) {
-            m_animationClock.restart();
-            m_animationTimer.start();
-        }
-    } else {
+    if (!visible) {
         m_animationTimer.stop();
-        m_ringRoot->setVisible(false);
+        m_motion = {};
+        m_currentEnergy = 0;
+        m_onsetPulse = 0;
+        m_lastOnset = 0;
+        m_screenRenderer->invalidateHistory();
         m_cursorItem->setTransform(PulsePointer::cursorImageTransform(m_cursorHotSpot, QTransform()));
+        if (wasVisible) {
+            effects->addRepaintFull();
+        }
+        return;
+    }
+    const bool ringActive = m_settings.beatRing && m_ringClock.isValid()
+        && m_ringClock.elapsed() < s_ringDurationMs;
+    const float targetEnergy = targetCursorEnergy();
+    const bool cursorAnimating = cursorVisible && isCursorMode(m_settings.cursor)
+        && (std::abs(targetEnergy - m_currentEnergy) >= 0.001 || m_onsetPulse >= 0.002
+            || (m_settings.cursor == PulsePointer::CursorAnimation::Wobble && targetEnergy >= 0.005));
+    const bool animationNeeded = cursorAnimating || ringActive
+        || (screenEffectsActive() && m_motion.moving());
+    if (animationNeeded && !m_animationTimer.isActive()) {
+        m_animationClock.restart();
+        m_animationTimer.start();
     }
 }
 

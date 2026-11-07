@@ -6,7 +6,7 @@
             }
         ],
         "Category": "Accessibility",
-        "Description": "Animate the mouse pointer in response to live system audio",
+        "Description": "Combine audio-reactive pointer, border, desktop color, and atmosphere effects",
         "EnabledByDefault": true,
         "License": "MIT",
         "Name": "PulsePointer"

@@ -2,6 +2,9 @@
 
 #include "effect/effect.h"
 #include "settings.h"
+#include "musicmotion.h"
+
+#include <tuple>
 
 #include <QElapsedTimer>
 #include <QPointF>
@@ -19,6 +22,16 @@ namespace KWin
 
 class ImageItem;
 class Item;
+class ScreenRenderer;
+
+// KWin 6.8 changed paintScreen's result from void to bool.
+template<typename> struct ScreenPaintSignature;
+template<typename R, typename C, typename... Args>
+struct ScreenPaintSignature<R (C::*)(Args...)> {
+    using Result = R;
+    using Arguments = std::tuple<Args...>;
+};
+using ScreenPaint = ScreenPaintSignature<decltype(&Effect::paintScreen)>;
 
 class PulsePointerEffect : public Effect
 {
@@ -30,8 +43,15 @@ public:
 
     bool isActive() const override;
     void reconfigure(ReconfigureFlags flags) override;
+    void prePaintScreen(ScreenPrePaintData &data) override;
+    ScreenPaint::Result paintScreen(const RenderTarget &target, const RenderViewport &viewport,
+                                    int mask, std::tuple_element_t<3, ScreenPaint::Arguments> region,
+                                    std::tuple_element_t<4, ScreenPaint::Arguments> screen) override;
+    bool blocksDirectScanout() const override;
+    int requestedEffectChainPosition() const override { return 99; }
 
 private:
+    bool screenEffectsActive() const;
     bool openSocket();
     void closeSocket();
     void readPendingPackets();
@@ -46,6 +66,10 @@ private:
     void updateVisibility();
     void setNativeCursorHidden(bool hidden);
 
+    std::unique_ptr<ScreenRenderer> m_screenRenderer;
+    PulsePointer::MusicMotion m_motion;
+    bool m_bypassed = false;
+    bool m_visualsVisible = false;
     std::unique_ptr<ImageItem> m_overlayItem;
     std::unique_ptr<Item> m_ringRoot;
     std::unique_ptr<ImageItem> m_ringItem;

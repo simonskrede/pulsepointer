@@ -44,8 +44,8 @@ jobs:
           apt-get update
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
-            kwin-dev kwin-x11-dev libdrm-dev libkf6kcmutils-dev libpulse-dev \
-            ninja-build pkg-config
+            kwin-dev kwin-x11-dev libdrm-dev libkf6globalaccel-dev libkf6kcmutils-dev libpulse-dev \
+            ninja-build pkg-config libegl-mesa0
 
       - name: Check out release tag
         uses: actions/checkout@v6
@@ -66,6 +66,9 @@ jobs:
         run: |
           PACKAGE_REVISION="${BASE_REVISION}+ubuntu${{ matrix.ubuntu }}" \
             ./packaging/build-deb.sh
+
+      - name: Test native effects and settings
+        run: ctest --test-dir target/package-build/kwin-wayland --output-on-failure --no-tests=error
 
       - name: Record package compatibility
         shell: bash
@@ -109,6 +112,11 @@ jobs:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       BASE_REVISION: ${{ github.event_name == 'workflow_dispatch' && inputs.package_revision || '1' }}
     steps:
+      - name: Check out release notes
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
       - name: Download package artifacts
         uses: actions/download-artifact@v5
         with:
@@ -129,6 +137,15 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}"
           else
+            awk -v heading="## [${RELEASE_TAG#v}]" '
+              index($0, heading) == 1 { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md >release-notes.md
+            if [[ ! -s release-notes.md ]]; then
+              echo "No changelog entry found for $RELEASE_TAG" >&2
+              exit 1
+            fi
             gh release create "$RELEASE_TAG" "${assets[@]}" \
-              --verify-tag --generate-notes --title "PulsePointer ${RELEASE_TAG#v}"
+              --verify-tag --notes-file release-notes.md --title "PulsePointer ${RELEASE_TAG#v}"
           fi

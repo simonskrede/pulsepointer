@@ -25,8 +25,8 @@ jobs:
           apt-get update
           apt-get install --yes --no-install-recommends \
             build-essential ca-certificates cargo cmake extra-cmake-modules \
-            kwin-dev libdrm-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
-            rust-clippy rustfmt
+            kwin-dev libdrm-dev libkf6globalaccel-dev libkf6kcmutils-dev libpulse-dev ninja-build pkg-config \
+            libegl-mesa0 rust-clippy rustfmt
 
       - name: Check out source
         uses: actions/checkout@v6
@@ -43,7 +43,7 @@ jobs:
       - name: Build Wayland package
         run: ./packaging/build-deb.sh --wayland-only
 
-      - name: Test cursor geometry and effect settings
+      - name: Test cursor, settings, audio motion, and screen shaders
         run: ctest --test-dir target/package-build/kwin-wayland --output-on-failure --no-tests=error
 
       - name: Upload test package

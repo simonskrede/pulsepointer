@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/pulsepointer">
+    <file>shaders/screen.vert</file>
+    <file>shaders/screen.frag</file>
+  </qresource>
+</RCC>

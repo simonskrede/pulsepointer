@@ -148,6 +148,7 @@ install_pulsepointer() {
         cmake
         extra-cmake-modules
         kcmutils
+        kglobalaccel
         qt6-base
         qt6-declarative
         libpulse
@@ -220,6 +221,10 @@ install_pulsepointer() {
         "${stage_dir}/usr/bin/pulsepointer"
 
     DESTDIR="$stage_dir" cmake --install "$build_dir"
+    install -Dm644 "${PROJECT_DIR}/docs/music-effects.md" \
+        "${stage_dir}/usr/share/doc/pulsepointer/docs/music-effects.md"
+    install -Dm644 "${PROJECT_DIR}/CHANGELOG.md" \
+        "${stage_dir}/usr/share/doc/pulsepointer/changelog.md"
 
     install -Dm644 \
         "${PROJECT_DIR}/packaging/systemd/pulsepointer.service" \

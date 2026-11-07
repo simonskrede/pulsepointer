@@ -30,7 +30,19 @@ private:
     void updateControlAvailability();
     void updateChangeState();
 
-    QComboBox *m_mode = nullptr;
+    QCheckBox *m_enabled = nullptr;
+    QComboBox *m_cursor = nullptr;
+    std::array<QCheckBox *, 5> m_pointerLayers{};
+    std::array<QCheckBox *, PulsePointer::screenEffectCount> m_effectChecks{};
+    std::array<QSpinBox *, PulsePointer::screenEffectCount> m_effectStrengths{};
+    QSpinBox *m_screenIntensity = nullptr;
+    QSpinBox *m_edgeReach = nullptr;
+    QSpinBox *m_edgeDensity = nullptr;
+    QSpinBox *m_edgeSoftness = nullptr;
+    QComboBox *m_edgeProfile = nullptr;
+    QSpinBox *m_attack = nullptr;
+    QSpinBox *m_release = nullptr;
+    QComboBox *m_monitors = nullptr;
     QSlider *m_intensity = nullptr;
     QLabel *m_intensityValue = nullptr;
     QCheckBox *m_beatRing = nullptr;

@@ -25,20 +25,24 @@ its official `ubuntu:<version>` container. This ensures the headers,
 libraries, dependency names, and generated package metadata all come from
 the target Ubuntu archive.
 
-1. Update the version in `Cargo.toml` and the CMake project.
+1. Update the version in `Cargo.toml`, `Cargo.lock`, and the CMake project. Add
+   release notes under the matching version heading in `CHANGELOG.md` and update
+   the README's highlights and installation examples.
 2. Merge and verify that the CI workflow passes.
-3. Create and push a matching tag, for example `v0.3.0`.
+3. Create and push a matching tag, for example `v0.4.0`.
 4. The release workflow builds the Wayland and X11 packages, generates GitHub
    build-provenance attestations, and attaches the `.deb` files plus SHA-256
    checksums to a GitHub Release.
 
+New releases use the matching `CHANGELOG.md` entry as their release notes.
+
 The package names identify the target, for example:
 
 ```text
-pulsepointer_0.3.0-1+ubuntu26.04_amd64.deb
-pulsepointer-kwin-x11_0.3.0-1+ubuntu26.04_amd64.deb
-pulsepointer_0.3.0-1+ubuntu26.10_amd64.deb
-pulsepointer-kwin-x11_0.3.0-1+ubuntu26.10_amd64.deb
+pulsepointer_0.4.0-1+ubuntu26.04_amd64.deb
+pulsepointer-kwin-x11_0.4.0-1+ubuntu26.04_amd64.deb
+pulsepointer_0.4.0-1+ubuntu26.10_amd64.deb
+pulsepointer-kwin-x11_0.4.0-1+ubuntu26.10_amd64.deb
 ```
 
 For a later KWin update within the same Ubuntu release, run **Build release
@@ -56,6 +60,7 @@ release's container:
 - `kwin-dev` provides the KWin 6 CMake target and headers.
 - `kwin-x11-dev` exists if an X11 companion is being published.
 - `libkwin6` and `libkwin-x11-6` are the corresponding runtime package names.
+- `libkf6globalaccel-dev` provides the configurable quick-bypass shortcut API.
 - `libkf6kcmutils-dev` provides the native Desktop Effects configuration module
   API.
 - The generated package can be installed on a fully updated Kubuntu system of

@@ -43,6 +43,7 @@ else
         extra-cmake-modules
         kwin-dev
         libdrm-dev
+        libkf6globalaccel-dev
         libkf6kcmutils-dev
         libpulse-dev
         pkg-config
@@ -131,7 +132,9 @@ mkdir -p "$main_stage/usr/lib/systemd/user/graphical-session.target.wants"
 ln -s ../pulsepointer.service \
     "$main_stage/usr/lib/systemd/user/graphical-session.target.wants/pulsepointer.service"
 install -Dm644 README.md "$main_stage/usr/share/doc/pulsepointer/README.md"
+install -Dm644 CHANGELOG.md "$main_stage/usr/share/doc/pulsepointer/changelog.md"
 install -Dm644 docs/ipc-protocol.md "$main_stage/usr/share/doc/pulsepointer/ipc-protocol.md"
+install -Dm644 docs/music-effects.md "$main_stage/usr/share/doc/pulsepointer/docs/music-effects.md"
 install -Dm644 LICENSE "$main_stage/usr/share/doc/pulsepointer/copyright"
 
 find "$main_stage/usr/lib" -type f -name 'pulsepointer*.so' \
