@@ -79,10 +79,11 @@ jobs:
       - name: Record package compatibility
         shell: bash
         run: |
+          source_commit=$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)
           metadata="dist/PACKAGE-METADATA-ubuntu${{ matrix.ubuntu }}-amd64-${BASE_REVISION}.txt"
           {
             echo "PulsePointer tag: $RELEASE_TAG"
-            echo "Source commit: $(git rev-parse HEAD)"
+            echo "Source commit: $source_commit"
             echo "Ubuntu release: ${{ matrix.ubuntu }}"
             dpkg-query -W -f='Wayland KWin: ${Package} ${Version}\n' libkwin6
             dpkg-query -W -f='X11 KWin: ${Package} ${Version}\n' libkwin-x11-6
@@ -152,9 +153,10 @@ jobs:
       - name: Record package compatibility
         shell: bash
         run: |
+          source_commit=$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)
           {
             echo "PulsePointer tag: $RELEASE_TAG"
-            echo "Source commit: $(git rev-parse HEAD)"
+            echo "Source commit: $source_commit"
             echo "Fedora release: 45"
             echo "Session: Plasma Wayland"
             rpm -q kwin-libs
