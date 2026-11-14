@@ -55,3 +55,43 @@ jobs:
           path: dist/*.deb
           if-no-files-found: error
           retention-days: 7
+
+  fedora:
+    name: Fedora 45 / Plasma Wayland
+    runs-on: ubuntu-24.04
+    container: registry.fedoraproject.org/fedora:45
+    steps:
+      - name: Install packaging tools
+        run: dnf install --assumeyes git-core cargo rpm-build dnf5-plugins rustfmt clippy
+
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install build dependencies
+        run: dnf builddep --assumeyes packaging/pulsepointer.spec
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+
+      - name: Lint Rust
+        run: cargo clippy --locked --all-targets -- --deny warnings
+
+      - name: Build and test Fedora RPMs
+        run: ./packaging/build-rpm.sh
+
+      - name: Install, inspect, and remove the binary RPM
+        run: |
+          dnf install --assumeyes ./dist/pulsepointer-*.x86_64.rpm
+          rpm -q --requires pulsepointer
+          rpm -V pulsepointer
+          pulsepointer --help
+          rpm --erase pulsepointer
+          test ! -e /usr/bin/pulsepointer
+
+      - name: Upload test packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsepointer-ci-fedora-45-x86_64
+          path: dist/*.rpm
+          if-no-files-found: error
+          retention-days: 7

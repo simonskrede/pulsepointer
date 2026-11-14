@@ -101,7 +101,8 @@ impl AudioProcessor {
         );
 
         let mut waveform = [0.0; AUDIO_CHUNK_FRAMES];
-        for (sample, frame) in waveform.iter_mut().zip(bytes.chunks_exact(4)) {
+        let (frames, _) = bytes.as_chunks::<4>();
+        for (sample, frame) in waveform.iter_mut().zip(frames) {
             let left = i16::from_ne_bytes([frame[0], frame[1]]) as f32 / 32_768.0;
             let right = i16::from_ne_bytes([frame[2], frame[3]]) as f32 / 32_768.0;
             *sample = (left + right) * 0.5;

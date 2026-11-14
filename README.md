@@ -39,6 +39,7 @@ the [changelog](CHANGELOG.md) for release details.
 | Kubuntu 26.04 LTS, Plasma X11 | Optional companion package |
 | Kubuntu 26.10, Plasma Wayland | Supported |
 | Kubuntu 26.10, Plasma X11 | Optional companion package |
+| Fedora KDE 45, Plasma Wayland | RPM build and CI target; desktop testing pending |
 | Arch Linux and compatible Arch-based distributions | Supported |
 | KDE Plasma 6 / KWin 6.6, 6.7, 6.8 | Supported by the Arch build |
 | Kubuntu 24.04 LTS / Plasma 5 | Not supported |
@@ -66,6 +67,36 @@ sudo apt install ./pulsepointer_0.4.0-1+ubuntu26.04_amd64.deb \
 ```
 
 Log out and back in once so KWin discovers the native effect. The package enables the effect and the `pulsepointer.service` user service by default.
+
+## Install on Fedora KDE 45
+
+Fedora 45 is the [current Fedora release](https://fedoraproject.org/kde/download/).
+Use a fully updated **KDE Plasma Wayland** session. Fedora Workstation's GNOME
+desktop and other Wayland compositors cannot load KWin effects.
+
+Download the `fc45.x86_64.rpm` binary package from the
+[latest release containing Fedora packages](https://github.com/simonskrede/pulsepointer/releases)
+and install it with DNF. For example, for application version 0.4.0, revision 1:
+
+```bash
+sudo dnf upgrade --refresh
+sudo dnf install ./pulsepointer-0.4.0-1.fc45.x86_64.rpm
+```
+
+The `.src.rpm` is for rebuilding, not installation. Log out of Plasma and back
+in once, then open **System Settings → Desktop Effects → PulsePointer**.
+The package enables the effect and the audio daemon for graphical sessions.
+PipeWire's PulseAudio service is installed as a dependency.
+
+The RPM requires the exact `kwin-libs` version used to build it. If DNF reports
+a version mismatch, use a matching package rebuild or build locally with the
+instructions below. KWin updates require a new PulsePointer RPM; remove
+PulsePointer temporarily with `sudo dnf remove pulsepointer` if a pending
+rebuild blocks a system upgrade. To uninstall, use the same remove command.
+
+Fedora packages target `x86_64` and Wayland; no Fedora X11 package is built.
+Container checks cover compilation, tests, and RPM installation. A real Fedora
+KDE session still needs desktop validation.
 
 ## Install on Arch Linux
 
@@ -255,6 +286,30 @@ Or build the Wayland and X11 packages together:
 ```
 
 The script does not install anything and writes native-architecture packages to `dist/`. GitHub's release workflow runs this build for Ubuntu 26.04 and 26.10 on `amd64`. Release revisions and additional distribution targets are documented in [distribution-packaging.md](docs/distribution-packaging.md).
+
+## Build packages on Fedora 45
+
+Build on the same fully updated Fedora release and architecture as the target
+desktop. Clone the repository, then install the packaging tools and the build
+requirements declared in the RPM spec:
+
+```bash
+sudo dnf upgrade --refresh
+sudo dnf install cargo rpm-build dnf5-plugins
+sudo dnf builddep packaging/pulsepointer.spec
+./packaging/build-rpm.sh
+```
+
+The build script vendors the locked Rust dependencies, then builds and tests
+the Wayland effect and daemon through `rpmbuild`. It writes a binary RPM and
+a source RPM to `dist/` without installing them. The initial vendoring step
+needs crates.io access unless the dependencies are already cached. The source
+RPM includes those dependencies for offline rebuilds.
+
+Set `PACKAGE_REVISION=2 ./packaging/build-rpm.sh` for a package rebuild after a
+KWin update. `./install.sh` remains the Arch installer; Fedora installations
+use DNF. See [distribution-packaging.md](docs/distribution-packaging.md) for
+release publishing and compatibility checks.
 
 ## Development checks
 

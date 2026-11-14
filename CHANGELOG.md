@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+- Add Fedora KDE 45 Wayland RPM packaging, including binary and source RPMs,
+  an exact KWin runtime dependency, and the graphical-session audio service.
+- Build, test, and install Fedora RPMs in CI; include Fedora packages,
+  compatibility metadata, checksums, and attestations in future releases.
+- Document Fedora installation, local builds, and rebuilding after KWin updates.
+  Validation in a real Fedora KDE desktop session remains pending.
+- Use fixed-size audio frames to pass Fedora's newer Rust lint checks while
+  preserving stereo sample decoding.
+- Allow manual package builds from a source commit for an existing application
+  release, recording the commit and keeping compatibility metadata per revision.
+
 ## [0.4.0] — 2026-11-07
 
 **A major expansion: PulsePointer brings the whole desktop into the music.**
